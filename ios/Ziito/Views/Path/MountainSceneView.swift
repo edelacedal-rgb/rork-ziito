@@ -114,6 +114,8 @@ final class MountainSceneCoordinator: NSObject {
 
     private let cameraNode = SCNNode()
     private let pivot = SCNNode()
+    /// Spins the entire diorama (mountain + wooden base + grass + trees) as one unit.
+    private let worldSpin = SCNNode()
     private let mountainPivot = SCNNode()
     private let flagsRoot = SCNNode()
     private let monumentsRoot = SCNNode()
@@ -133,8 +135,11 @@ final class MountainSceneCoordinator: NSObject {
     private var currentNames: [String] = []
 
     // Geometry constants
-    private let baseRadius: Float = 3.6
-    private let summit: Float = 7.6
+    private let baseRadius: Float = 4.2
+    private let summit: Float = 8.4
+    // Non-uniform footprint so the peak reads wider & elongated (less round).
+    private let stretchX: Float = 1.28
+    private let stretchZ: Float = 0.82
 
     func attach(view: SCNView, scene: SCNScene) {
         self.sceneView = view
@@ -144,13 +149,14 @@ final class MountainSceneCoordinator: NSObject {
 
     private func build(scene: SCNScene) {
         scene.rootNode.addChildNode(pivot)
-        pivot.addChildNode(mountainPivot)
+        pivot.addChildNode(worldSpin)
+        worldSpin.addChildNode(mountainPivot)
         mountainPivot.addChildNode(flagsRoot)
         mountainPivot.addChildNode(monumentsRoot)
         mountainPivot.addChildNode(labelsRoot)
         mountainPivot.addChildNode(trailRoot)
         mountainPivot.addChildNode(progressFog)
-        pivot.addChildNode(gearRoot)
+        worldSpin.addChildNode(gearRoot)
 
         // Camera
         let cam = SCNCamera()
@@ -210,7 +216,7 @@ final class MountainSceneCoordinator: NSObject {
         wood.materials = [woodMat]
         let woodNode = SCNNode(geometry: wood)
         woodNode.position.y = -0.275
-        scene.rootNode.addChildNode(woodNode)
+        worldSpin.addChildNode(woodNode)
 
         // Darker rim ring beneath for a grounded, layered look.
         let rim = SCNCylinder(radius: platformRadius + 0.04, height: 0.18)
@@ -222,7 +228,7 @@ final class MountainSceneCoordinator: NSObject {
         rim.materials = [rimMat]
         let rimNode = SCNNode(geometry: rim)
         rimNode.position.y = -0.64
-        scene.rootNode.addChildNode(rimNode)
+        worldSpin.addChildNode(rimNode)
 
         // Grass apron — a low green dome hugging the foot of the mountain.
         let grass = SCNSphere(radius: CGFloat(baseRadius) + 1.5)
@@ -236,7 +242,7 @@ final class MountainSceneCoordinator: NSObject {
         let grassNode = SCNNode(geometry: grass)
         grassNode.scale = SCNVector3(1, 0.16, 1)
         grassNode.position.y = -Float(grass.radius) * 0.16 + 0.12
-        scene.rootNode.addChildNode(grassNode)
+        worldSpin.addChildNode(grassNode)
 
         // A few low-poly pine trees scattered on the grass apron near the front.
         let treeSpots: [(x: Float, z: Float, s: Float)] = [
@@ -247,7 +253,7 @@ final class MountainSceneCoordinator: NSObject {
         for spot in treeSpots {
             let tree = buildPineTree(scale: spot.s)
             tree.position = SCNVector3(spot.x, 0.05, spot.z)
-            scene.rootNode.addChildNode(tree)
+            worldSpin.addChildNode(tree)
         }
     }
 
@@ -364,7 +370,7 @@ final class MountainSceneCoordinator: NSObject {
             guard !label.isEmpty else { continue }
             let centerAngle = (Float(s) + 0.5) / Float(segs) * Float.pi * 2
             let r: Float = baseRadius + 1.55
-            let pos = SCNVector3(r * cos(centerAngle), 0.85, r * sin(centerAngle))
+            let pos = SCNVector3(r * cos(centerAngle) * stretchX, 0.85, r * sin(centerAngle) * stretchZ)
 
             let text = SCNText(string: label.uppercased(), extrusionDepth: 0.04)
             text.font = UIFont.systemFont(ofSize: 0.42, weight: .heavy)
@@ -443,7 +449,7 @@ final class MountainSceneCoordinator: NSObject {
             let n = hashNoise(ring, col % angular)
             let radial = baseR * (1 + (n - 0.5) * 0.42 * (1 - t * 0.4))
             let yJitter = (hashNoise(col % angular, ring) - 0.5) * 0.5 * t
-            return SCNVector3(radial * cos(a), heightAt(t) + yJitter, radial * sin(a))
+            return SCNVector3(radial * cos(a) * stretchX, heightAt(t) + yJitter, radial * sin(a) * stretchZ)
         }
 
         var vertices: [SCNVector3] = []
@@ -643,6 +649,7 @@ final class MountainSceneCoordinator: NSObject {
         mat.blendMode = .alpha
         cone.materials = [mat]
         let coneNode = SCNNode(geometry: cone)
+        coneNode.scale = SCNVector3(stretchX, 1, stretchZ)
         coneNode.position.y = bottomY + Float(max(0.2, height)) / 2
         coneNode.opacity = 0
         progressFog.addChildNode(coneNode)
@@ -749,7 +756,7 @@ final class MountainSceneCoordinator: NSObject {
             let segs = max(1, faceCount)
             let centerAngle = (Float(m.subjectIndex) + 0.5) / Float(segs) * Float.pi * 2
             let r: Float = baseRadius + 1.05
-            root.position = SCNVector3(r * cos(centerAngle), 0, r * sin(centerAngle))
+            root.position = SCNVector3(r * cos(centerAngle) * stretchX, 0, r * sin(centerAngle) * stretchZ)
             outwardYaw = atan2(root.position.x, root.position.z)
         } else {
             let pos = surfacePoint(angleIndex: m.subjectIndex, altitude: m.altitude)
@@ -949,9 +956,9 @@ final class MountainSceneCoordinator: NSObject {
 
         SCNTransaction.begin()
         SCNTransaction.animationDuration = animated ? 0.18 : 0
-        // Only the mountain (and flags/monuments attached to it) physically rotates.
+        // The entire diorama (mountain + wooden base + grass + trees) rotates as one unit.
         // The camera and lights stay world-static so the rotation truly reveals lit/shadowed faces.
-        mountainPivot.eulerAngles.y = Float(rotation)
+        worldSpin.eulerAngles.y = Float(rotation)
         cameraNode.position = SCNVector3(0, camY, camDistance)
         cameraNode.look(at: SCNVector3(0, lookY, 0))
         SCNTransaction.commit()
@@ -974,7 +981,7 @@ final class MountainSceneCoordinator: NSObject {
         let y = heightAt(a)
         // Offset slightly outward so flags sit on the surface
         let r = radius + 0.08
-        let pos = SCNVector3(r * cos(centerAngle), y, r * sin(centerAngle))
+        let pos = SCNVector3(r * cos(centerAngle) * stretchX, y, r * sin(centerAngle) * stretchZ)
         // Outward yaw: face away from center
         let yaw = atan2(pos.x, pos.z)
         return SurfacePoint(position: pos, outwardYaw: yaw)
