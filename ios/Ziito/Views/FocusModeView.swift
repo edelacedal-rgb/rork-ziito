@@ -85,6 +85,8 @@ struct FocusModeView: View {
             // Wire the automatic reward: only fires when the focus timer reaches 00:00.
             pomodoro.onFocusCompleted = { _ in
                 FlagFXService.shared.playFlagPlant(mastery: false)
+                // Duolingo-style reward: XP, streak advance and a refilled heart.
+                GamificationService.shared.registerStudyCompletion(cycles: 1)
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.65)) { flashReward = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
                     withAnimation(.easeOut(duration: 0.4)) { flashReward = false }

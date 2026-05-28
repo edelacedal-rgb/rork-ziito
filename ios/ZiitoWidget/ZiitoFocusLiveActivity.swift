@@ -94,16 +94,37 @@ struct ZiitoFocusLiveActivity: Widget {
                     }
                 }
             } compactLeading: {
+                // Keep the compact island as narrow as possible so it never grows
+                // wide enough to cover the status-bar clock, battery, Wi-Fi or cellular.
                 Image(systemName: "mountain.2.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .imageScale(.small)
                     .foregroundStyle(subjectColor)
             } compactTrailing: {
-                timerText(state: context.state, big: false)
+                compactTimerText(state: context.state)
+                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
                     .foregroundStyle(.white)
+                    .frame(maxWidth: 46)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             } minimal: {
                 Image(systemName: "mountain.2.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .imageScale(.small)
                     .foregroundStyle(subjectColor)
             }
             .keylineTint(subjectColor)
+        }
+    }
+
+    /// Compact timer for the Dynamic Island — minimal width to preserve status-bar items.
+    @ViewBuilder
+    private func compactTimerText(state: ZiitoFocusAttributes.ContentState) -> some View {
+        if state.isPaused {
+            Text(pausedTimeString(state.pausedRemaining))
+        } else {
+            Text(timerInterval: Date.now...state.endDate, countsDown: true)
+                .multilineTextAlignment(.trailing)
         }
     }
 

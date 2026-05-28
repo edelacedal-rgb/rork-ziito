@@ -217,11 +217,11 @@ final class AIService {
 
     // MARK: - Socratic tutor (Home hero)
 
-    /// Astra in Socratic mode: never gives the final answer outright; guides with
+    /// Owl in Socratic mode: never gives the final answer outright; guides with
     /// counter-questions and step-by-step challenges to verify real understanding.
     func socraticChat(history: [ChatMessage], sources: [Source]) async throws -> ChatMessage {
         var system = """
-        Eres Astra, un tutor socrático para estudiantes. Respondes en español, con calidez y precisión.
+        Eres Owl, un tutor socrático para estudiantes. Respondes en español, con calidez y precisión.
 
         MÉTODO SOCRÁTICO (obligatorio):
         - NUNCA entregues la solución o respuesta final de golpe.

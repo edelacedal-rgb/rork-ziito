@@ -157,16 +157,31 @@ final class MountainSceneCoordinator: NSObject {
         ambient.light = amb
         scene.rootNode.addChildNode(ambient)
 
-        // Ground
+        // Ground — STATIC grass "Base Camp" floor. Lives on rootNode (never rotates),
+        // so it buries the mountain's rotation pivot completely.
         let ground = SCNFloor()
         ground.reflectivity = 0
         let groundMat = SCNMaterial()
-        groundMat.diffuse.contents = UIColor(red: 0.20, green: 0.22, blue: 0.24, alpha: 1)
-        groundMat.lightingModel = .lambert
+        groundMat.diffuse.contents = UIColor(red: 0.30, green: 0.52, blue: 0.30, alpha: 1)
+        groundMat.lightingModel = .physicallyBased
+        groundMat.roughness.contents = 0.95
+        groundMat.metalness.contents = 0.0
         ground.materials = [groundMat]
         let groundNode = SCNNode(geometry: ground)
         groundNode.position.y = 0
         scene.rootNode.addChildNode(groundNode)
+
+        // A soft mound of grass around the foot so the mountain emerges organically.
+        let mound = SCNSphere(radius: CGFloat(baseRadius) + 1.4)
+        mound.segmentCount = 48
+        let moundMat = SCNMaterial()
+        moundMat.diffuse.contents = UIColor(red: 0.27, green: 0.48, blue: 0.28, alpha: 1)
+        moundMat.lightingModel = .physicallyBased
+        moundMat.roughness.contents = 0.95
+        mound.materials = [moundMat]
+        let moundNode = SCNNode(geometry: mound)
+        moundNode.position.y = -Float(mound.radius) + 0.35
+        scene.rootNode.addChildNode(moundNode)
 
         // Fog
         scene.fogStartDistance = 25
@@ -193,52 +208,33 @@ final class MountainSceneCoordinator: NSObject {
     private func rebuildMountainGeometry(colors: [UIColor], names: [String]) {
         currentColors = colors
         currentNames = names
-        // Dynamic N-faced prism, one face per subject (clamped to a sane minimum).
+        // Dynamic N-faced mountain, one smooth colored wedge per subject.
         faceCount = max(3, colors.count)
 
         // Remove old mountain nodes (children of mountainPivot except special roots)
-        for child in mountainPivot.childNodes where child !== flagsRoot && child !== monumentsRoot {
+        for child in mountainPivot.childNodes where child !== flagsRoot && child !== monumentsRoot && child !== labelsRoot {
             child.removeFromParentNode()
         }
-
-        // Build the mountain as a stack of low-poly frustums for a chunky, sculpted look.
-        let layers = 7
-        var bottomRadius: Float = baseRadius
-        let totalHeight = summit
-        let layerHeight = totalHeight / Float(layers)
         faceMaterials = []
 
-        for i in 0..<layers {
-            let t = Float(i) / Float(layers)
-            let topRadius = baseRadius * (1 - Float(i + 1) / Float(layers) * 0.92)
-            // Jitter for organic look
-            let jitter = Float.random(in: 0.92...1.05)
-            let layerNode = SCNNode()
-
-            let geometry = lowPolyFrustum(
-                bottomRadius: bottomRadius * jitter,
-                topRadius: max(0.05, topRadius),
-                height: layerHeight,
-                segments: faceCount,
-                colors: colors,
-                shadeFactor: 0.65 + 0.35 * Double(t)
-            )
-            let n = SCNNode(geometry: geometry)
-            n.position.y = Float(i) * layerHeight
-            layerNode.addChildNode(n)
-            mountainPivot.addChildNode(layerNode)
-
-            bottomRadius = topRadius
-        }
+        // One single smooth, high-poly mountain mesh (no chunky frustum stack).
+        let mesh = smoothMountainGeometry(colors: colors)
+        let meshNode = SCNNode(geometry: mesh)
+        meshNode.name = "mountainMesh"
+        mountainPivot.addChildNode(meshNode)
 
         // Snow cap (small white cone on top)
-        let cap = SCNCone(topRadius: 0.05, bottomRadius: CGFloat(bottomRadius * 1.05), height: 0.8)
+        let bottomRadius = radiusAt(0.97)
+        let cap = SCNCone(topRadius: 0.04, bottomRadius: CGFloat(bottomRadius * 1.2), height: 0.7)
+        cap.radialSegmentCount = 48
         let snow = SCNMaterial()
-        snow.diffuse.contents = UIColor(white: 0.96, alpha: 1)
-        snow.lightingModel = .lambert
+        snow.diffuse.contents = UIColor(white: 0.97, alpha: 1)
+        snow.lightingModel = .physicallyBased
+        snow.roughness.contents = 0.6
+        snow.metalness.contents = 0.0
         cap.materials = [snow]
         let capNode = SCNNode(geometry: cap)
-        capNode.position.y = summit + 0.4
+        capNode.position.y = heightAt(0.97) + 0.3
         mountainPivot.addChildNode(capNode)
 
         // Beacon at zenit
@@ -324,53 +320,91 @@ final class MountainSceneCoordinator: NSObject {
         }
     }
 
-    /// Builds a low-poly prism-like frustum with one material per radial face.
-    private func lowPolyFrustum(bottomRadius: Float, topRadius: Float, height: Float, segments: Int, colors: [UIColor], shadeFactor: Double) -> SCNGeometry {
-        var vertices: [SCNVector3] = []
-        var normals: [SCNVector3] = []
-        var indices: [[Int32]] = Array(repeating: [], count: segments)
+    // MARK: - Mountain profile
+
+    /// Smooth, curved radius profile so the silhouette tapers organically (no chunky steps).
+    private func radiusAt(_ t: Float) -> Float {
+        let tc = max(0, min(1, t))
+        return baseRadius * pow(1 - tc, 1.25) + 0.06
+    }
+
+    private func heightAt(_ t: Float) -> Float {
+        max(0, min(1, t)) * summit
+    }
+
+    /// Subtle deterministic ridge displacement (smooth, repeatable across rebuilds).
+    private func ridgeNoise(angle: Float, t: Float) -> Float {
+        let a = sin(angle * 3.0 + t * 4.0) * 0.035
+        let b = sin(angle * 7.0 - t * 2.0) * 0.018
+        return 1 + (a + b) * (1 - t * 0.6)
+    }
+
+    /// Builds a single high-resolution, smooth-shaded mountain with one colored
+    /// wedge per subject. Normals are computed analytically for soft shading.
+    private func smoothMountainGeometry(colors: [UIColor]) -> SCNGeometry {
+        let segs = max(3, colors.count)
+        let angularPerFace = 8
+        let angular = segs * angularPerFace
+        let rings = 26
         let pi2 = Float.pi * 2
 
-        for s in 0..<segments {
-            let a0 = Float(s) / Float(segments) * pi2
-            let a1 = Float(s + 1) / Float(segments) * pi2
-            // Slight ridgeline jitter so the silhouette feels carved
-            let j: Float = Float.random(in: 0.95...1.04)
-            let br = bottomRadius * j
-            let tr = topRadius * j
+        var vertices: [SCNVector3] = []
+        var normals: [SCNVector3] = []
+        vertices.reserveCapacity((rings + 1) * angular)
+        normals.reserveCapacity((rings + 1) * angular)
 
-            let p0 = SCNVector3(br * cos(a0), 0, br * sin(a0))
-            let p1 = SCNVector3(br * cos(a1), 0, br * sin(a1))
-            let p2 = SCNVector3(tr * cos(a1), height, tr * sin(a1))
-            let p3 = SCNVector3(tr * cos(a0), height, tr * sin(a0))
+        func index(_ ring: Int, _ col: Int) -> Int32 { Int32(ring * angular + (col % angular)) }
 
-            // Outward-pointing normal computed from the face center angle so
-            // shading is consistent across all faces (independent of winding).
-            let am = (a0 + a1) * 0.5
-            let n = SCNVector3(cos(am), 0, sin(am))
+        for ring in 0...rings {
+            let t = Float(ring) / Float(rings)
+            let r = radiusAt(t)
+            let y = heightAt(t)
+            let dt: Float = 0.01
+            let rPrime = (radiusAt(t + dt) - radiusAt(t - dt)) / (2 * dt)
+            let hPrime = (heightAt(t + dt) - heightAt(t - dt)) / (2 * dt)
+            for col in 0..<angular {
+                let a = Float(col) / Float(angular) * pi2
+                let rr = r * ridgeNoise(angle: a, t: t)
+                let p = SCNVector3(rr * cos(a), y, rr * sin(a))
+                vertices.append(p)
+                var nx = hPrime * cos(a)
+                let ny = -rPrime
+                var nz = hPrime * sin(a)
+                let len = sqrt(nx * nx + ny * ny + nz * nz)
+                if len > 0 { nx /= len; nz /= len }
+                let nyN = len > 0 ? ny / len : 1
+                normals.append(SCNVector3(nx, nyN, nz))
+            }
+        }
 
-            let base = Int32(vertices.count)
-            vertices.append(contentsOf: [p0, p1, p2, p3])
-            normals.append(contentsOf: [n, n, n, n])
-            // CCW winding when viewed from OUTSIDE (front-facing).
-            indices[s].append(contentsOf: [base, base + 2, base + 1, base, base + 3, base + 2])
+        var perFaceIndices: [[Int32]] = Array(repeating: [], count: segs)
+        for ring in 0..<rings {
+            for col in 0..<angular {
+                let face = (col / angularPerFace) % segs
+                let a = index(ring, col)
+                let b = index(ring, col + 1)
+                let c = index(ring + 1, col)
+                let d = index(ring + 1, col + 1)
+                perFaceIndices[face].append(contentsOf: [a, c, b, b, c, d])
+            }
         }
 
         let vSource = SCNGeometrySource(vertices: vertices)
         let nSource = SCNGeometrySource(normals: normals)
-
         var elements: [SCNGeometryElement] = []
         var materials: [SCNMaterial] = []
-        for s in 0..<segments {
-            let data = Data(bytes: indices[s], count: indices[s].count * MemoryLayout<Int32>.size)
-            let elem = SCNGeometryElement(data: data, primitiveType: .triangles, primitiveCount: indices[s].count / 3, bytesPerIndex: MemoryLayout<Int32>.size)
+        for face in 0..<segs {
+            let idx = perFaceIndices[face]
+            let data = Data(bytes: idx, count: idx.count * MemoryLayout<Int32>.size)
+            let elem = SCNGeometryElement(data: data, primitiveType: .triangles, primitiveCount: idx.count / 3, bytesPerIndex: MemoryLayout<Int32>.size)
             elements.append(elem)
 
             let mat = SCNMaterial()
-            let baseColor = colors[s % colors.count]
-            mat.diffuse.contents = baseColor.mixed(with: .black, t: 1 - shadeFactor)
-            mat.lightingModel = .lambert
-            mat.locksAmbientWithDiffuse = true
+            let baseColor = colors[face % colors.count]
+            mat.diffuse.contents = baseColor
+            mat.lightingModel = .physicallyBased
+            mat.roughness.contents = 0.85
+            mat.metalness.contents = 0.0
             mat.isDoubleSided = true
             materials.append(mat)
             faceMaterials.append(mat)
@@ -708,11 +742,11 @@ final class MountainSceneCoordinator: NSObject {
         let segs = max(1, faceCount)
         let centerAngle = (Float(angleIndex) + 0.5) / Float(segs) * Float.pi * 2
         let a = max(0, min(1, Float(altitude)))
-        // Linear taper from baseRadius to ~0
-        let radius = baseRadius * (1 - a * 0.95) + 0.1
-        let y = a * summit
+        // Match the smooth mountain profile so flags/monuments hug the real surface.
+        let radius = radiusAt(a)
+        let y = heightAt(a)
         // Offset slightly outward so flags sit on the surface
-        let r = radius + 0.05
+        let r = radius + 0.08
         let pos = SCNVector3(r * cos(centerAngle), y, r * sin(centerAngle))
         // Outward yaw: face away from center
         let yaw = atan2(pos.x, pos.z)

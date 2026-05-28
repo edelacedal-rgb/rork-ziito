@@ -27,7 +27,7 @@ struct SocraticTutorHero: View {
                     Text("🦉").font(.system(size: 20))
                 }
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Astra · Tutor Socrático")
+                    Text("Owl · Tutor Socrático")
                         .font(.headline)
                         .foregroundStyle(.white)
                     Text("No te da la respuesta: te guía a encontrarla.")
@@ -129,7 +129,7 @@ struct SocraticChatView: View {
                 messagesList
                 composer
             }
-            .navigationTitle("Tutor Socrático")
+            .navigationTitle("Owl")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cerrar") { dismiss() } }
@@ -158,7 +158,7 @@ struct SocraticChatView: View {
                     if sending {
                         HStack(spacing: 8) {
                             ProgressView().tint(.green)
-                            Text("Astra está pensando una pregunta…")
+                            Text("Owl está pensando una pregunta…")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         .padding(.leading, 12)
@@ -178,7 +178,7 @@ struct SocraticChatView: View {
             Text("🦉").font(.system(size: 44))
             Text("Aprende razonando")
                 .font(.headline)
-            Text("Astra no te dará la respuesta directa. Te hará preguntas para que llegues tú mismo a la solución.")
+            Text("Owl no te dará la respuesta directa. Te hará preguntas para que llegues tú mismo a la solución.")
                 .font(.subheadline).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
