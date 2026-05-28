@@ -212,7 +212,7 @@ final class MountainSceneCoordinator: NSObject {
     // MARK: - Diorama base (static, never rotates)
 
     private func buildDioramaBase(scene: SCNScene) {
-        let platformRadius = CGFloat(baseRadius) + 1.9
+        let platformRadius = CGFloat(baseRadius) + 3.6
 
         // Wooden platform (top surface flush with y = 0).
         let wood = SCNCylinder(radius: platformRadius, height: 0.55)
@@ -240,7 +240,7 @@ final class MountainSceneCoordinator: NSObject {
         groundParent.addChildNode(rimNode)
 
         // Grass apron — a low green dome hugging the foot of the mountain.
-        let grass = SCNSphere(radius: CGFloat(baseRadius) + 1.5)
+        let grass = SCNSphere(radius: CGFloat(baseRadius) + 3.2)
         grass.segmentCount = 64
         let grassMat = SCNMaterial()
         grassMat.diffuse.contents = UIColor(red: 0.42, green: 0.62, blue: 0.30, alpha: 1)
@@ -253,20 +253,70 @@ final class MountainSceneCoordinator: NSObject {
         grassNode.position.y = -Float(grass.radius) * 0.16 + 0.12
         groundParent.addChildNode(grassNode)
 
-        // A few low-poly pine trees scattered on the grass apron near the front.
-        let treeSpots: [(x: Float, z: Float, s: Float)] = [
-            (-2.7, 2.9, 1.0),
-            (-3.3, 2.0, 0.78),
-            (2.9, 2.7, 0.62)
+        // A winding stone path crossing the grass apron toward the mountain foot.
+        buildGroundPath()
+
+        // Low-poly pine trees scattered around the OUTER ring of the grass apron,
+        // well clear of the mountain foot (radius > baseRadius) so they read as a
+        // surrounding forest instead of being stuck onto the slopes.
+        let footR = baseRadius
+        let treeSpots: [(angle: Float, r: Float, s: Float)] = [
+            (0.55, footR + 2.4, 1.0),
+            (1.15, footR + 2.9, 0.82),
+            (1.85, footR + 2.5, 0.7),
+            (2.45, footR + 2.95, 0.95),
+            (3.05, footR + 2.6, 0.78),
+            (3.75, footR + 2.85, 1.05),
+            (4.35, footR + 2.5, 0.72),
+            (5.05, footR + 2.95, 0.9),
+            (5.65, footR + 2.6, 0.8),
+            (6.05, footR + 2.85, 0.68)
         ]
         for spot in treeSpots {
+            let jitter = hashNoise(Int(spot.angle * 97), Int(spot.r * 53)) * 0.5 - 0.25
+            let a = spot.angle + jitter
             let tree = buildPineTree(scale: spot.s)
-            tree.position = SCNVector3(spot.x, 0.05, spot.z)
+            tree.position = SCNVector3(spot.r * cos(a), 0.05, spot.r * sin(a))
             groundParent.addChildNode(tree)
         }
 
         // Static stone altar to the RIGHT that collects a replica of every planted flag.
         buildAltarStructure()
+    }
+
+    /// A winding stone-slab path crossing the grass apron from the front edge toward
+    /// the foot of the mountain. Flat, earth-toned, no glow.
+    private func buildGroundPath() {
+        let pathRoot = SCNNode()
+        // Curve from the front rim of the grass inward toward the mountain foot.
+        let startR = baseRadius + 3.0
+        let endR = baseRadius + 0.5
+        let steps = 14
+        for i in 0...steps {
+            let f = Float(i) / Float(steps)
+            let r = startR * (1 - f) + endR * f
+            // Gentle S-curve sideways as it approaches the mountain.
+            let lateral = sin(f * Float.pi * 1.6) * 0.9
+            // Path heads toward the front of the camera (positive Z).
+            let baseAngle = Float.pi / 2
+            let x = r * cos(baseAngle) + lateral
+            let z = r * sin(baseAngle)
+
+            let slab = SCNCylinder(radius: CGFloat(0.46 - f * 0.12), height: 0.06)
+            slab.radialSegmentCount = 12
+            let m = SCNMaterial()
+            let tone = 0.62 + hashNoise(i, 7) * 0.12
+            m.diffuse.contents = UIColor(red: CGFloat(tone), green: CGFloat(tone * 0.9), blue: CGFloat(tone * 0.78), alpha: 1)
+            m.lightingModel = .physicallyBased
+            m.roughness.contents = 0.9
+            m.metalness.contents = 0.0
+            slab.materials = [m]
+            let n = SCNNode(geometry: slab)
+            n.position = SCNVector3(x, 0.07, z)
+            n.eulerAngles.y = hashNoise(i, 3) * 0.6 - 0.3
+            pathRoot.addChildNode(n)
+        }
+        groundParent.addChildNode(pathRoot)
     }
 
     /// A low stone plinth on the right edge of the grass where flag replicas are planted.
