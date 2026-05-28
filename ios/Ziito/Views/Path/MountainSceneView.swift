@@ -137,9 +137,9 @@ final class MountainSceneCoordinator: NSObject {
     // Geometry constants
     private let baseRadius: Float = 4.2
     private let summit: Float = 8.4
-    // Non-uniform footprint so the peak reads wider & elongated (less round).
-    private let stretchX: Float = 1.28
-    private let stretchZ: Float = 0.82
+    // Uniform footprint so the peak reads equally wide & robust from every side.
+    private let stretchX: Float = 1.18
+    private let stretchZ: Float = 1.18
 
     func attach(view: SCNView, scene: SCNScene) {
         self.sceneView = view
@@ -164,7 +164,7 @@ final class MountainSceneCoordinator: NSObject {
         cam.zNear = 0.1
         cam.zFar = 200
         cameraNode.camera = cam
-        cameraNode.position = SCNVector3(0, 4, 16)
+        cameraNode.position = SCNVector3(0, 4, 21)
         cameraNode.look(at: SCNVector3(0, 4, 0))
         pivot.addChildNode(cameraNode)
 
@@ -951,7 +951,7 @@ final class MountainSceneCoordinator: NSObject {
     func updateCamera(altitude: Double, rotation: Double, animated: Bool) {
         let altClamped = max(0, min(1, altitude))
         let camY = Float(altClamped) * (summit + 2) - 1.5
-        let camDistance: Float = 16 - Float(altClamped) * 4 // farther so we always render OUTSIDE the rock
+        let camDistance: Float = 21 - Float(altClamped) * 4 // farther so we always render OUTSIDE the rock
         let lookY = camY + 1.5
 
         SCNTransaction.begin()

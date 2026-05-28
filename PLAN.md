@@ -25,7 +25,7 @@
 
 - **Diorama sobre base de madera:** la montaña se asienta en una plataforma circular de madera con borde oscuro, con un faldón de pasto verde abrazando su base y un par de pinos low-poly. Cielo azul suave de fondo.
 - **Pico rocoso facetado:** roca gris facetada (low-poly) que transiciona a nieve blanca hacia la cima, con vetas de nieve bajando por las laderas, hasta una sola cumbre puntiaguda.
-- **Gira todo el diorama:** al deslizar de lado, la montaña junto con la base de madera, el pasto y los pinos rotan como un solo conjunto; la cámara y la luz quedan fijas. El pico es un poco más ancho, alto y de huella elíptica (menos redondo).
+- **Gira todo el diorama:** al deslizar de lado, la montaña junto con la base de madera, el pasto y los pinos rotan como un solo conjunto; la cámara y la luz quedan fijas. El pico es ancho y robusto por igual en todos los lados (huella uniforme), con la cámara más alejada para encuadrar el diorama completo.
 - **Sendero estilo Duolingo:** un camino curvo y suave con nodos circulares sutiles y planos, integrados de forma natural en tonos tierra, coherentes con la vegetación.
 - **Niebla de progreso (estilo Candy Crush):** una neblina blanca suave cubre el tercio superior y se disipa hacia arriba a medida que avanzas y desbloqueas niveles.
 - **Cámara a nivel del suelo:** empiezas viendo desde la base, y la cámara sube suavemente por la montaña conforme completas tus bloques de enfoque.
