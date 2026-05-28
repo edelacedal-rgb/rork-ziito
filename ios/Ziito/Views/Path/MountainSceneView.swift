@@ -474,30 +474,84 @@ final class MountainSceneCoordinator: NSObject {
         return t * t * (3 - 2 * t)
     }
 
+    /// Smooth 2D value noise in 0..1 (bilinear-interpolated hash lattice).
+    private func valueNoise(_ x: Float, _ z: Float) -> Float {
+        let xi = floor(x), zi = floor(z)
+        let xf = x - xi, zf = z - zi
+        let i = Int(xi), j = Int(zi)
+        let v00 = hashNoise(i, j)
+        let v10 = hashNoise(i + 1, j)
+        let v01 = hashNoise(i, j + 1)
+        let v11 = hashNoise(i + 1, j + 1)
+        let u = xf * xf * (3 - 2 * xf)
+        let v = zf * zf * (3 - 2 * zf)
+        let a = v00 * (1 - u) + v10 * u
+        let b = v01 * (1 - u) + v11 * u
+        return a * (1 - v) + b * v
+    }
+
+    /// Fractal Brownian motion (~0..1) sampled on a point — periodic when fed circle coords.
+    private func fbm(_ x: Float, _ z: Float) -> Float {
+        var sum: Float = 0, amp: Float = 0.5, freq: Float = 1, norm: Float = 0
+        for _ in 0..<4 {
+            sum += valueNoise(x * freq, z * freq) * amp
+            norm += amp
+            freq *= 2.07
+            amp *= 0.5
+        }
+        return sum / max(0.0001, norm)
+    }
+
+    /// Sharp ridged noise in 0..1 — produces crisp mountain spines instead of blobs.
+    private func ridged(_ x: Float, _ z: Float) -> Float {
+        let n = fbm(x, z)
+        let r = 1 - abs(2 * n - 1)
+        return r * r
+    }
+
+    /// Number of major ridge spurs radiating from the peak.
+    private let ridgeCount: Float = 7
+
+    /// Relief multiplier applied to the silhouette radius: ridge spurs push outward,
+    /// eroded gullies pull inward. Relief is strong at the base and tapers near the
+    /// summit so the peak stays defined but craggy (never a smooth cone).
+    private func reliefMultiplier(t: Float, angle: Float) -> Float {
+        // Periodic sample coords (wrap seam automatically).
+        let sx = cos(angle), sz = sin(angle)
+        // Major spurs: a few dominant ridges around the silhouette.
+        let spurs = ridged(sx * ridgeCount * 0.5 + 3.1, sz * ridgeCount * 0.5 + 7.7)
+        // Mid + fine detail crags.
+        let crag = fbm(sx * 4.3 + 11.0, sz * 4.3 + 2.0)
+        // Combine: spurs dominate the form, crags add roughness.
+        let relief = (spurs - 0.45) * 0.55 + (crag - 0.5) * 0.30
+        // More relief low down, fading (but not vanishing) near the apex.
+        let fade = 0.35 + 0.65 * (1 - t)
+        return 1 + relief * fade
+    }
+
+    /// Vertical jitter so ring layers aren't perfectly flat discs — gives crag shelves.
+    private func heightJitter(t: Float, angle: Float) -> Float {
+        let sx = cos(angle), sz = sin(angle)
+        let n = fbm(sx * 3.0 + 5.0, sz * 3.0 + 9.0) - 0.5
+        return n * summit * 0.05 * (1 - t * 0.5)
+    }
+
     /// Builds a PREMIUM SMOOTH-SHADED mountain: a shared-vertex grid with averaged
     /// vertex normals so the slopes read as continuous matte-porcelain surfaces (no
     /// blocky flat facets). Grey rock at the base flows smoothly up into white snow.
     private func porcelainMountainGeometry() -> SCNGeometry {
-        // Moderate density: smooth, continuous silhouette without over-tessellating.
-        let angular = 48
-        let rings = 14
+        // Higher density so ridges and gullies read cleanly while staying smooth-shaded.
+        let angular = 72
+        let rings = 22
         let pi2 = Float.pi * 2
         let rf = Float(rings)
-
-        // Gentle, stable radial undulation for organic — but smooth — slopes.
-        func radialFactor(_ ring: Int, _ col: Int) -> Float {
-            let t = Float(ring) / rf
-            let a = Float(col) / Float(angular) * pi2
-            // Two low-frequency sine lobes keep the form soft and continuous.
-            let lobes = sin(a * 3) * 0.05 + sin(a * 5 + 1.3) * 0.03
-            return 1 + lobes * (1 - t * 0.6)
-        }
 
         func point(_ ring: Int, _ col: Int) -> SCNVector3 {
             let t = Float(ring) / rf
             let a = Float(col) / Float(angular) * pi2
-            let radial = radiusAt(t) * radialFactor(ring, col)
-            return SCNVector3(radial * cos(a) * stretchX, heightAt(t), radial * sin(a) * stretchZ)
+            let radial = radiusAt(t) * reliefMultiplier(t: t, angle: a)
+            let y = heightAt(t) + heightJitter(t: t, angle: a)
+            return SCNVector3(radial * cos(a) * stretchX, y, radial * sin(a) * stretchZ)
         }
 
         // Shared vertex grid: (rings+1) rows including the apex row collapsed at top.
@@ -1105,9 +1159,9 @@ final class MountainSceneCoordinator: NSObject {
         let segs = max(1, faceCount)
         let centerAngle = (Float(angleIndex) + 0.5) / Float(segs) * Float.pi * 2 + angleOffset
         let a = max(0, min(1, Float(altitude)))
-        // Match the smooth mountain profile so flags/monuments hug the real surface.
-        let radius = radiusAt(a)
-        let y = heightAt(a)
+        // Match the craggy mountain profile so flags/monuments hug the real surface.
+        let radius = radiusAt(a) * reliefMultiplier(t: a, angle: centerAngle)
+        let y = heightAt(a) + heightJitter(t: a, angle: centerAngle)
         // Offset slightly outward so flags sit on the surface
         let r = radius + 0.08
         let pos = SCNVector3(r * cos(centerAngle) * stretchX, y, r * sin(centerAngle) * stretchZ)
