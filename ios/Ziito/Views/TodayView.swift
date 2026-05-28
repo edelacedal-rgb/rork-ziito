@@ -41,6 +41,8 @@ struct TodayView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
+                    SocraticTutorHero()
+
                     headerCard
 
                     studyMomentBanner

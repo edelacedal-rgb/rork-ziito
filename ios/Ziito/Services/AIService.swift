@@ -215,6 +215,37 @@ final class AIService {
         return ChatMessage(role: "assistant", content: raw, citations: citations)
     }
 
+    // MARK: - Socratic tutor (Home hero)
+
+    /// Astra in Socratic mode: never gives the final answer outright; guides with
+    /// counter-questions and step-by-step challenges to verify real understanding.
+    func socraticChat(history: [ChatMessage], sources: [Source]) async throws -> ChatMessage {
+        var system = """
+        Eres Astra, un tutor socrático para estudiantes. Respondes en español, con calidez y precisión.
+
+        MÉTODO SOCRÁTICO (obligatorio):
+        - NUNCA entregues la solución o respuesta final de golpe.
+        - Descompón el problema en pasos pequeños y guía con contrapreguntas.
+        - Haz UNA pregunta clave a la vez para verificar la comprensión real.
+        - Si el estudiante se equivoca, no lo corrijas directamente: ofrece una pista o una pregunta que lo lleve a notar el error.
+        - Solo cuando el estudiante haya razonado los pasos, confirma y resume brevemente lo aprendido.
+        - Sé conciso (2-5 frases). Usa Markdown ligero cuando ayude.
+        """
+        if !sources.isEmpty {
+            let pack = sources.enumerated().map { idx, s in
+                "[FUENTE \(idx + 1)] \(s.title) (\(s.kind.label)):\n\(s.context(limit: 3000))"
+            }.joined(separator: "\n\n---\n\n")
+            system += "\n\nApóyate en los apuntes del estudiante cuando sea relevante:\n\(pack)"
+        }
+
+        var messages: [CoreMessage] = [CoreMessage(role: "system", content: system)]
+        for m in history {
+            messages.append(CoreMessage(role: m.role, content: m.content))
+        }
+        let raw = try await complete(messages: messages)
+        return ChatMessage(role: "assistant", content: raw)
+    }
+
     // MARK: - Helpers
 
     private static func extractJSON(from text: String) -> String {
