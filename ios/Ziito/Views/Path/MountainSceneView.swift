@@ -95,6 +95,7 @@ struct MountainSceneView: UIViewRepresentable {
         let c = context.coordinator
         c.refreshFaces(subjectColors: subjectColors, subjectNames: subjectNames)
         c.refreshFlags(flags)
+        c.refreshAltar(flags)
         c.refreshMonuments(monuments)
         c.refreshGear(gear)
         c.refreshTrail(trail)
@@ -114,8 +115,10 @@ final class MountainSceneCoordinator: NSObject {
 
     private let cameraNode = SCNNode()
     private let pivot = SCNNode()
-    /// Spins the entire diorama (mountain + wooden base + grass + trees) as one unit.
-    private let worldSpin = SCNNode()
+    /// Static landscape: grass floor, wooden base, trees, camp (left) and flag altar (right).
+    /// Never rotates — it buries the mountain's rotation pivot completely.
+    private let groundParent = SCNNode()
+    /// The ONLY node that rotates on the Y-axis when the user swipes horizontally.
     private let mountainPivot = SCNNode()
     private let flagsRoot = SCNNode()
     private let monumentsRoot = SCNNode()
@@ -123,6 +126,9 @@ final class MountainSceneCoordinator: NSObject {
     private let trailRoot = SCNNode()
     private let progressFog = SCNNode()
     private let gearRoot = SCNNode()
+    /// Static flag altar anchored to the RIGHT of the diorama; mirrors planted flags.
+    private let altarRoot = SCNNode()
+    private var currentAltarCount: Int = -1
     private var currentTrailSignature: String = ""
     private var currentFogReveal: Double = -1
     private let sun = SCNNode()
@@ -149,23 +155,26 @@ final class MountainSceneCoordinator: NSObject {
 
     private func build(scene: SCNScene) {
         scene.rootNode.addChildNode(pivot)
-        pivot.addChildNode(worldSpin)
-        worldSpin.addChildNode(mountainPivot)
+        // Static landscape and the rotating mountain are SIBLINGS, so only the
+        // mountain spins while the grass/camp/altar stay locked in place.
+        pivot.addChildNode(groundParent)
+        pivot.addChildNode(mountainPivot)
         mountainPivot.addChildNode(flagsRoot)
         mountainPivot.addChildNode(monumentsRoot)
         mountainPivot.addChildNode(labelsRoot)
         mountainPivot.addChildNode(trailRoot)
         mountainPivot.addChildNode(progressFog)
-        worldSpin.addChildNode(gearRoot)
+        groundParent.addChildNode(gearRoot)
+        groundParent.addChildNode(altarRoot)
 
-        // Camera
+        // Camera — anchored at human eye-level on the grass, looking slightly up.
         let cam = SCNCamera()
         cam.fieldOfView = 55
         cam.zNear = 0.1
         cam.zFar = 200
         cameraNode.camera = cam
-        cameraNode.position = SCNVector3(0, 4, 21)
-        cameraNode.look(at: SCNVector3(0, 4, 0))
+        cameraNode.position = SCNVector3(0, 1.2, 20)
+        cameraNode.look(at: SCNVector3(0, 4.0, 0))
         pivot.addChildNode(cameraNode)
 
         // Sun (directional)
@@ -216,7 +225,7 @@ final class MountainSceneCoordinator: NSObject {
         wood.materials = [woodMat]
         let woodNode = SCNNode(geometry: wood)
         woodNode.position.y = -0.275
-        worldSpin.addChildNode(woodNode)
+        groundParent.addChildNode(woodNode)
 
         // Darker rim ring beneath for a grounded, layered look.
         let rim = SCNCylinder(radius: platformRadius + 0.04, height: 0.18)
@@ -228,7 +237,7 @@ final class MountainSceneCoordinator: NSObject {
         rim.materials = [rimMat]
         let rimNode = SCNNode(geometry: rim)
         rimNode.position.y = -0.64
-        worldSpin.addChildNode(rimNode)
+        groundParent.addChildNode(rimNode)
 
         // Grass apron — a low green dome hugging the foot of the mountain.
         let grass = SCNSphere(radius: CGFloat(baseRadius) + 1.5)
@@ -242,7 +251,7 @@ final class MountainSceneCoordinator: NSObject {
         let grassNode = SCNNode(geometry: grass)
         grassNode.scale = SCNVector3(1, 0.16, 1)
         grassNode.position.y = -Float(grass.radius) * 0.16 + 0.12
-        worldSpin.addChildNode(grassNode)
+        groundParent.addChildNode(grassNode)
 
         // A few low-poly pine trees scattered on the grass apron near the front.
         let treeSpots: [(x: Float, z: Float, s: Float)] = [
@@ -253,8 +262,39 @@ final class MountainSceneCoordinator: NSObject {
         for spot in treeSpots {
             let tree = buildPineTree(scale: spot.s)
             tree.position = SCNVector3(spot.x, 0.05, spot.z)
-            worldSpin.addChildNode(tree)
+            groundParent.addChildNode(tree)
         }
+
+        // Static stone altar to the RIGHT that collects a replica of every planted flag.
+        buildAltarStructure()
+    }
+
+    /// A low stone plinth on the right edge of the grass where flag replicas are planted.
+    private func buildAltarStructure() {
+        let baseX: Float = baseRadius + 1.25
+        altarRoot.position = SCNVector3(baseX, 0.02, 2.4)
+
+        let plinth = SCNCylinder(radius: 0.62, height: 0.34)
+        plinth.radialSegmentCount = 28
+        let pm = SCNMaterial()
+        pm.diffuse.contents = UIColor(white: 0.55, alpha: 1)
+        pm.lightingModel = .physicallyBased
+        pm.roughness.contents = 0.8
+        plinth.materials = [pm]
+        let plinthNode = SCNNode(geometry: plinth)
+        plinthNode.position.y = 0.17
+        altarRoot.addChildNode(plinthNode)
+
+        let cap = SCNCylinder(radius: 0.68, height: 0.08)
+        cap.radialSegmentCount = 28
+        let cm = SCNMaterial()
+        cm.diffuse.contents = UIColor(white: 0.66, alpha: 1)
+        cm.lightingModel = .physicallyBased
+        cm.roughness.contents = 0.7
+        cap.materials = [cm]
+        let capNode = SCNNode(geometry: cap)
+        capNode.position.y = 0.38
+        altarRoot.addChildNode(capNode)
     }
 
     /// A stylized low-poly pine: a short trunk topped with two stacked green cones.
@@ -302,6 +342,7 @@ final class MountainSceneCoordinator: NSObject {
         let names = subjectNames.isEmpty ? Array(repeating: "", count: colors.count) : subjectNames
         rebuildMountainGeometry(colors: colors, names: names)
         refreshFlags(flags)
+        refreshAltar(flags)
         refreshMonuments(monuments)
         refreshGear(gear)
         refreshTrail(trail)
@@ -321,8 +362,8 @@ final class MountainSceneCoordinator: NSObject {
         }
         faceMaterials = []
 
-        // One single low-poly faceted snowy-rock mountain mesh.
-        let mesh = facetedMountainGeometry()
+        // One single smooth-shaded snowy-rock mountain mesh (premium matte porcelain).
+        let mesh = smoothMountainGeometry()
         let meshNode = SCNNode(geometry: mesh)
         meshNode.name = "mountainMesh"
         mountainPivot.addChildNode(meshNode)
@@ -433,82 +474,108 @@ final class MountainSceneCoordinator: NSObject {
         return t * t * (3 - 2 * t)
     }
 
-    /// Builds a single low-poly, flat-shaded mountain: grey rock at the base blending
-    /// to white snow toward the peak, with crisp triangular facets (diorama style).
-    private func facetedMountainGeometry() -> SCNGeometry {
-        let angular = 13
-        let rings = 12
+    /// Builds a single smooth-shaded mountain: grey rock at the base blending to white
+    /// snow toward the peak. Uses a shared vertex grid with averaged per-vertex normals
+    /// so the surface reads as a clean, continuous matte-porcelain slope (no flat facets).
+    private func smoothMountainGeometry() -> SCNGeometry {
+        let angular = 56
+        let rings = 18
         let pi2 = Float.pi * 2
+        let rf = Float(rings)
 
-        // Pre-compute a stable displaced grid so triangle seams always match.
+        // Stable radial displacement; gentle so the silhouette stays clean & premium.
+        func radialNoise(_ ring: Int, _ col: Int) -> Float {
+            let c = ((col % angular) + angular) % angular
+            let t = Float(ring) / rf
+            return (hashNoise(ring, c) - 0.5) * 0.22 * (1 - t * 0.45)
+        }
+
         func point(_ ring: Int, _ col: Int) -> SCNVector3 {
-            let t = Float(ring) / Float(rings)
-            if ring >= rings { return SCNVector3(0, summit, 0) } // shared apex
-            let baseR = radiusAt(t)
-            let a = Float(col % angular) / Float(angular) * pi2
-            let n = hashNoise(ring, col % angular)
-            let radial = baseR * (1 + (n - 0.5) * 0.42 * (1 - t * 0.4))
-            let yJitter = (hashNoise(col % angular, ring) - 0.5) * 0.5 * t
-            return SCNVector3(radial * cos(a) * stretchX, heightAt(t) + yJitter, radial * sin(a) * stretchZ)
+            let t = Float(ring) / rf
+            let a = Float(col) / Float(angular) * pi2
+            let radial = radiusAt(t) * (1 + radialNoise(ring, col))
+            return SCNVector3(radial * cos(a) * stretchX, heightAt(t), radial * sin(a) * stretchZ)
         }
 
-        var vertices: [SCNVector3] = []
-        var normals: [SCNVector3] = []
-        var colorComps: [Float] = []
-        var indices: [Int32] = []
-
-        let rock = SIMD3<Float>(0.60, 0.62, 0.66)
-        let rockDark = SIMD3<Float>(0.42, 0.44, 0.48)
-        let snow = SIMD3<Float>(0.96, 0.97, 1.0)
-
-        func emit(_ a: SCNVector3, _ b: SCNVector3, _ c: SCNVector3, snowAmt: Float, shade: Float) {
-            // Flat normal for the triangle.
-            let ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z
-            let vx = c.x - a.x, vy = c.y - a.y, vz = c.z - a.z
-            var nx = uy * vz - uz * vy
-            var ny = uz * vx - ux * vz
-            var nz = ux * vy - uy * vx
-            let len = sqrt(nx * nx + ny * ny + nz * nz)
-            if len > 0 { nx /= len; ny /= len; nz /= len }
-            let rockMix = mix(rockDark, rock, t: shade)
-            let col = mix(rockMix, snow, t: snowAmt)
-            for p in [a, b, c] {
-                vertices.append(p)
-                normals.append(SCNVector3(nx, ny, nz))
-                colorComps.append(contentsOf: [col.x, col.y, col.z, 1])
-                indices.append(Int32(indices.count))
-            }
-        }
-
+        // Shared vertex grid (ring × col) + a single apex vertex.
+        var positions: [SCNVector3] = []
+        positions.reserveCapacity(rings * angular + 1)
         for ring in 0..<rings {
-            let tMid = (Float(ring) + 0.5) / Float(rings)
             for col in 0..<angular {
-                let p00 = point(ring, col)
-                let p01 = point(ring, col + 1)
-                let p10 = point(ring + 1, col)
-                let p11 = point(ring + 1, col + 1)
-                // Snow: concentrated near the peak, with vertical streaks running down gullies.
-                let streak = hashNoise(0, col % angular)
-                let snowBase = smoothstep(0.42, 0.82, tMid)
-                let snowStreak = smoothstep(0.55, 1.0, streak) * smoothstep(0.2, 0.7, tMid)
-                let snowAmt = max(snowBase, snowStreak)
-                let shade = 0.55 + hashNoise(ring, col % angular) * 0.45
-                if ring == rings - 1 {
-                    emit(p00, p01, p10, snowAmt: snowAmt, shade: shade) // converge to apex p10==p11
-                } else {
-                    emit(p00, p10, p01, snowAmt: snowAmt, shade: shade)
-                    emit(p01, p10, p11, snowAmt: snowAmt, shade: shade)
-                }
+                positions.append(point(ring, col))
             }
         }
+        let apexIndex = positions.count
+        positions.append(SCNVector3(0, summit, 0))
 
-        let vSource = SCNGeometrySource(vertices: vertices)
+        func gridIndex(_ ring: Int, _ col: Int) -> Int {
+            ring * angular + ((col % angular + angular) % angular)
+        }
+
+        // Triangles (outward winding) between adjacent rings, then a fan to the apex.
+        var indices: [Int32] = []
+        for ring in 0..<(rings - 1) {
+            for col in 0..<angular {
+                let a = gridIndex(ring, col)
+                let b = gridIndex(ring, col + 1)
+                let c = gridIndex(ring + 1, col)
+                let d = gridIndex(ring + 1, col + 1)
+                indices.append(contentsOf: [Int32(a), Int32(c), Int32(b)])
+                indices.append(contentsOf: [Int32(b), Int32(c), Int32(d)])
+            }
+        }
+        let topRing = rings - 1
+        for col in 0..<angular {
+            let a = gridIndex(topRing, col)
+            let b = gridIndex(topRing, col + 1)
+            indices.append(contentsOf: [Int32(a), Int32(apexIndex), Int32(b)])
+        }
+
+        // Accumulate face normals into shared vertices, then normalize → smooth shading.
+        var accum = [SIMD3<Float>](repeating: .zero, count: positions.count)
+        var k = 0
+        while k < indices.count {
+            let i0 = Int(indices[k]), i1 = Int(indices[k + 1]), i2 = Int(indices[k + 2])
+            let p0 = positions[i0], p1 = positions[i1], p2 = positions[i2]
+            let u = SIMD3<Float>(p1.x - p0.x, p1.y - p0.y, p1.z - p0.z)
+            let v = SIMD3<Float>(p2.x - p0.x, p2.y - p0.y, p2.z - p0.z)
+            let n = SIMD3<Float>(u.y * v.z - u.z * v.y, u.z * v.x - u.x * v.z, u.x * v.y - u.y * v.x)
+            accum[i0] += n; accum[i1] += n; accum[i2] += n
+            k += 3
+        }
+        let normals: [SCNVector3] = accum.map {
+            let len = sqrt($0.x * $0.x + $0.y * $0.y + $0.z * $0.z)
+            guard len > 0 else { return SCNVector3(0, 1, 0) }
+            return SCNVector3($0.x / len, $0.y / len, $0.z / len)
+        }
+
+        // Per-vertex vertex colors: rock blending to snow toward the peak + soft streaks.
+        let rock = SIMD3<Float>(0.62, 0.64, 0.69)
+        let rockDark = SIMD3<Float>(0.46, 0.48, 0.53)
+        let snow = SIMD3<Float>(0.97, 0.98, 1.0)
+        var colorComps: [Float] = []
+        colorComps.reserveCapacity(positions.count * 4)
+        for vi in 0..<positions.count {
+            let ring = vi == apexIndex ? rings : vi / angular
+            let col = vi == apexIndex ? 0 : vi % angular
+            let t = Float(ring) / rf
+            let streak = hashNoise(0, col % angular)
+            let snowBase = smoothstep(0.46, 0.86, t)
+            let snowStreak = smoothstep(0.58, 1.0, streak) * smoothstep(0.24, 0.74, t)
+            let snowAmt = max(snowBase, snowStreak)
+            let shade = 0.72 + hashNoise(ring, col % angular) * 0.28
+            let rockMix = mix(rockDark, rock, t: shade)
+            let c = mix(rockMix, snow, t: snowAmt)
+            colorComps.append(contentsOf: [c.x, c.y, c.z, 1])
+        }
+
+        let vSource = SCNGeometrySource(vertices: positions)
         let nSource = SCNGeometrySource(normals: normals)
         let colorData = Data(bytes: colorComps, count: colorComps.count * MemoryLayout<Float>.size)
         let cSource = SCNGeometrySource(
             data: colorData,
             semantic: .color,
-            vectorCount: vertices.count,
+            vectorCount: positions.count,
             usesFloatComponents: true,
             componentsPerVector: 4,
             bytesPerComponent: MemoryLayout<Float>.size,
@@ -521,7 +588,7 @@ final class MountainSceneCoordinator: NSObject {
         let mat = SCNMaterial()
         mat.diffuse.contents = UIColor.white
         mat.lightingModel = .physicallyBased
-        mat.roughness.contents = 0.9
+        mat.roughness.contents = 0.82
         mat.metalness.contents = 0.0
         mat.isDoubleSided = false
         faceMaterials = [mat]
@@ -688,6 +755,57 @@ final class MountainSceneCoordinator: NSObject {
         }
     }
 
+    /// Mirrors every planted flag onto the static altar on the right (dual-spawn).
+    func refreshAltar(_ flags: [MountainFlag]) {
+        guard flags.count != currentAltarCount else { return }
+        currentAltarCount = flags.count
+        // Keep the plinth/cap (the first two children) and rebuild only the planted flags.
+        for child in altarRoot.childNodes where child.name == "altarFlag" {
+            child.removeFromParentNode()
+        }
+        let capped = Array(flags.prefix(16))
+        let cols = 4
+        for (i, f) in capped.enumerated() {
+            let row = i / cols
+            let colIdx = i % cols
+            let x = (Float(colIdx) - 1.5) * 0.26
+            let z = (Float(row) - 1.5) * 0.26
+            let mini = buildAltarFlag(flag: f)
+            mini.name = "altarFlag"
+            mini.position = SCNVector3(x, 0.42, z)
+            mini.scale = SCNVector3(0.55, 0.55, 0.55)
+            altarRoot.addChildNode(mini)
+        }
+    }
+
+    private func buildAltarFlag(flag: MountainFlag) -> SCNNode {
+        let node = SCNNode()
+        let pole = SCNCylinder(radius: 0.04, height: 0.7)
+        let poleMat = SCNMaterial()
+        poleMat.diffuse.contents = UIColor(white: 0.15, alpha: 1)
+        poleMat.lightingModel = .lambert
+        pole.materials = [poleMat]
+        let poleNode = SCNNode(geometry: pole)
+        poleNode.position = SCNVector3(0, 0.35, 0)
+        node.addChildNode(poleNode)
+
+        let cloth = SCNPlane(width: 0.42, height: 0.28)
+        let m = SCNMaterial()
+        let subjectColor: UIColor = {
+            guard !currentColors.isEmpty else { return UIColor(white: 0.78, alpha: 1) }
+            return currentColors[flag.subjectIndex % currentColors.count]
+        }()
+        m.diffuse.contents = flag.isMastery ? UIColor(red: 1.0, green: 0.82, blue: 0.25, alpha: 1) : subjectColor
+        m.emission.contents = flag.isMastery ? UIColor(red: 0.6, green: 0.5, blue: 0.1, alpha: 1) : subjectColor.mixed(with: .black, t: 0.7)
+        m.isDoubleSided = true
+        m.lightingModel = .lambert
+        cloth.materials = [m]
+        let clothNode = SCNNode(geometry: cloth)
+        clothNode.position = SCNVector3(0.22, 0.55, 0)
+        node.addChildNode(clothNode)
+        return node
+    }
+
     private func buildFlagNode(flag: MountainFlag) -> SCNNode {
         let pos = surfacePoint(angleIndex: flag.subjectIndex, altitude: flag.altitude)
         let node = SCNNode()
@@ -826,9 +944,9 @@ final class MountainSceneCoordinator: NSObject {
     }
 
     private func buildGearNode(_ gear: MountainGear, slot: Int) -> SCNNode {
-        // Arrange around base camp in an arc
-        let angle = -Float.pi / 2 + Float(slot) * 0.4
-        let r: Float = baseRadius + 1.6
+        // Base camp lives as a static anchor on the LEFT-front of the grass apron.
+        let angle = 2.35 + Float(slot) * 0.32
+        let r: Float = baseRadius + 1.35
         let pos = SCNVector3(r * cos(angle), 0, r * sin(angle))
         let node = SCNNode()
         node.position = pos
@@ -950,15 +1068,18 @@ final class MountainSceneCoordinator: NSObject {
 
     func updateCamera(altitude: Double, rotation: Double, animated: Bool) {
         let altClamped = max(0, min(1, altitude))
-        let camY = Float(altClamped) * (summit + 2) - 1.5
-        let camDistance: Float = 21 - Float(altClamped) * 4 // farther so we always render OUTSIDE the rock
-        let lookY = camY + 1.5
+        // Camera is anchored at ground/eye-level on the grass and climbs gently as the
+        // user ascends. It never traverses the rock and stays world-static during rotation.
+        let camY = 1.2 + Float(altClamped) * 5.4
+        let camDistance: Float = 20 - Float(altClamped) * 2
+        let lookY = camY + 2.6 // look slightly upward toward the active ladera
 
         SCNTransaction.begin()
         SCNTransaction.animationDuration = animated ? 0.18 : 0
-        // The entire diorama (mountain + wooden base + grass + trees) rotates as one unit.
-        // The camera and lights stay world-static so the rotation truly reveals lit/shadowed faces.
-        worldSpin.eulerAngles.y = Float(rotation)
+        // ONLY the mountain rotates on its internal Y-axis. The grass floor, base camp
+        // (left) and flag altar (right) stay locked, so the user feels planted on the
+        // ground watching the laderas spin in front of them.
+        mountainPivot.eulerAngles.y = Float(rotation)
         cameraNode.position = SCNVector3(0, camY, camDistance)
         cameraNode.look(at: SCNVector3(0, lookY, 0))
         SCNTransaction.commit()

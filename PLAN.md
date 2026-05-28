@@ -21,14 +21,16 @@
 - Una vista compacta de tu **próxima actividad** de la agenda.
 - Debajo, tus tareas y evaluaciones del día, sin desorden.
 
-### 4. Rediseño de la Montaña — Diorama Low-Poly (pico rocoso nevado)
+### 4. Rediseño de la Montaña — Carousel Engine (V10)
 
-- **Diorama sobre base de madera:** la montaña se asienta en una plataforma circular de madera con borde oscuro, con un faldón de pasto verde abrazando su base y un par de pinos low-poly. Cielo azul suave de fondo.
-- **Pico rocoso facetado:** roca gris facetada (low-poly) que transiciona a nieve blanca hacia la cima, con vetas de nieve bajando por las laderas, hasta una sola cumbre puntiaguda.
-- **Gira todo el diorama:** al deslizar de lado, la montaña junto con la base de madera, el pasto y los pinos rotan como un solo conjunto; la cámara y la luz quedan fijas. El pico es ancho y robusto por igual en todos los lados (huella uniforme), con la cámara más alejada para encuadrar el diorama completo.
-- **Sendero estilo Duolingo:** un camino curvo y suave con nodos circulares sutiles y planos, integrados de forma natural en tonos tierra, coherentes con la vegetación.
-- **Niebla de progreso (estilo Candy Crush):** una neblina blanca suave cubre el tercio superior y se disipa hacia arriba a medida que avanzas y desbloqueas niveles.
-- **Cámara a nivel del suelo:** empiezas viendo desde la base, y la cámara sube suavemente por la montaña conforme completas tus bloques de enfoque.
+- **Diorama sobre base de madera:** la montaña se asienta en una plataforma circular de madera con borde oscuro, con un faldón de pasto verde abrazando su base y un par de pinos. Cielo azul suave de fondo.
+- **Sombreado suave (porcelana mate):** la malla usa normales por vértice promediadas, eliminando las facetas planas; roca gris que transiciona a nieve blanca hacia la cima, con vetas suaves.
+- **Solo gira la montaña:** al deslizar de lado, únicamente la montaña rota sobre su eje Y interno. El pasto, el campamento (izquierda) y el altar de banderas (derecha) quedan estáticos, como si estuvieras parado en el suelo viendo girar las laderas.
+- **Snapping entre materias:** al soltar el swipe, la montaña interpola suavemente y encara exactamente una cara/materia frente a la cámara.
+- **Cámara anclada al suelo:** la cámara se posa a la altura de los ojos sobre el pasto, mirando ligeramente hacia arriba, y sube con suavidad conforme asciendes. Nunca atraviesa la roca.
+- **Sendero estilo Duolingo:** un camino curvo y suave con nodos circulares planos, en tonos tierra, sin neón ni brillos artificiales.
+- **Niebla de progreso (estilo Candy Crush):** una neblina blanca suave cubre el tercio superior y se disipa hacia arriba a medida que avanzas.
+- **Doble bandera:** al terminar un temporizador se planta una bandera en el nodo de la cara activa y una réplica aparece en el altar estático de la derecha.
 
 ### 5. Progreso por enfoque (sin IA)
 
