@@ -134,7 +134,7 @@ final class MountainSceneCoordinator: NSObject {
 
     // Geometry constants
     private let baseRadius: Float = 3.6
-    private let summit: Float = 10.0
+    private let summit: Float = 7.6
 
     func attach(view: SCNView, scene: SCNScene) {
         self.sceneView = view
@@ -179,40 +179,114 @@ final class MountainSceneCoordinator: NSObject {
         ambient.light = amb
         scene.rootNode.addChildNode(ambient)
 
-        // Ground — STATIC grass "Base Camp" floor. Lives on rootNode (never rotates),
-        // so it buries the mountain's rotation pivot completely.
-        let ground = SCNFloor()
-        ground.reflectivity = 0
-        let groundMat = SCNMaterial()
-        groundMat.diffuse.contents = UIColor(red: 0.30, green: 0.52, blue: 0.30, alpha: 1)
-        groundMat.lightingModel = .physicallyBased
-        groundMat.roughness.contents = 0.95
-        groundMat.metalness.contents = 0.0
-        ground.materials = [groundMat]
-        let groundNode = SCNNode(geometry: ground)
-        groundNode.position.y = 0
-        scene.rootNode.addChildNode(groundNode)
+        // STATIC diorama base — a round wooden platform with a grass apron and a
+        // couple of low-poly pine trees. Lives on rootNode (never rotates), so it
+        // buries the mountain's rotation pivot completely.
+        buildDioramaBase(scene: scene)
 
-        // A soft mound of grass around the foot so the mountain emerges organically.
-        let mound = SCNSphere(radius: CGFloat(baseRadius) + 1.4)
-        mound.segmentCount = 48
-        let moundMat = SCNMaterial()
-        moundMat.diffuse.contents = UIColor(red: 0.27, green: 0.48, blue: 0.28, alpha: 1)
-        moundMat.lightingModel = .physicallyBased
-        moundMat.roughness.contents = 0.95
-        mound.materials = [moundMat]
-        let moundNode = SCNNode(geometry: mound)
-        moundNode.position.y = -Float(mound.radius) + 0.35
-        scene.rootNode.addChildNode(moundNode)
-
-        // Fog
-        scene.fogStartDistance = 25
-        scene.fogEndDistance = 80
-        scene.fogColor = UIColor(white: 0.85, alpha: 1)
-        scene.fogDensityExponent = 1.6
+        // Soft atmospheric fog, kept distant so the diorama stays crisp & bright.
+        scene.fogStartDistance = 40
+        scene.fogEndDistance = 120
+        scene.fogColor = UIColor(white: 0.92, alpha: 1)
+        scene.fogDensityExponent = 1.4
 
         // Build initial mountain with placeholder colors
         rebuildMountainGeometry(colors: [UIColor.systemIndigo, .systemTeal, .systemOrange, .systemPink], names: ["", "", "", ""])
+    }
+
+    // MARK: - Diorama base (static, never rotates)
+
+    private func buildDioramaBase(scene: SCNScene) {
+        let platformRadius = CGFloat(baseRadius) + 1.9
+
+        // Wooden platform (top surface flush with y = 0).
+        let wood = SCNCylinder(radius: platformRadius, height: 0.55)
+        wood.radialSegmentCount = 64
+        let woodMat = SCNMaterial()
+        woodMat.diffuse.contents = UIColor(red: 0.45, green: 0.30, blue: 0.18, alpha: 1)
+        woodMat.lightingModel = .physicallyBased
+        woodMat.roughness.contents = 0.7
+        woodMat.metalness.contents = 0.0
+        wood.materials = [woodMat]
+        let woodNode = SCNNode(geometry: wood)
+        woodNode.position.y = -0.275
+        scene.rootNode.addChildNode(woodNode)
+
+        // Darker rim ring beneath for a grounded, layered look.
+        let rim = SCNCylinder(radius: platformRadius + 0.04, height: 0.18)
+        rim.radialSegmentCount = 64
+        let rimMat = SCNMaterial()
+        rimMat.diffuse.contents = UIColor(red: 0.28, green: 0.18, blue: 0.10, alpha: 1)
+        rimMat.lightingModel = .physicallyBased
+        rimMat.roughness.contents = 0.8
+        rim.materials = [rimMat]
+        let rimNode = SCNNode(geometry: rim)
+        rimNode.position.y = -0.64
+        scene.rootNode.addChildNode(rimNode)
+
+        // Grass apron — a low green dome hugging the foot of the mountain.
+        let grass = SCNSphere(radius: CGFloat(baseRadius) + 1.5)
+        grass.segmentCount = 64
+        let grassMat = SCNMaterial()
+        grassMat.diffuse.contents = UIColor(red: 0.42, green: 0.62, blue: 0.30, alpha: 1)
+        grassMat.lightingModel = .physicallyBased
+        grassMat.roughness.contents = 0.95
+        grassMat.metalness.contents = 0.0
+        grass.materials = [grassMat]
+        let grassNode = SCNNode(geometry: grass)
+        grassNode.scale = SCNVector3(1, 0.16, 1)
+        grassNode.position.y = -Float(grass.radius) * 0.16 + 0.12
+        scene.rootNode.addChildNode(grassNode)
+
+        // A few low-poly pine trees scattered on the grass apron near the front.
+        let treeSpots: [(x: Float, z: Float, s: Float)] = [
+            (-2.7, 2.9, 1.0),
+            (-3.3, 2.0, 0.78),
+            (2.9, 2.7, 0.62)
+        ]
+        for spot in treeSpots {
+            let tree = buildPineTree(scale: spot.s)
+            tree.position = SCNVector3(spot.x, 0.05, spot.z)
+            scene.rootNode.addChildNode(tree)
+        }
+    }
+
+    /// A stylized low-poly pine: a short trunk topped with two stacked green cones.
+    private func buildPineTree(scale: Float) -> SCNNode {
+        let root = SCNNode()
+
+        let trunk = SCNCylinder(radius: 0.08, height: 0.34)
+        trunk.radialSegmentCount = 6
+        let trunkMat = SCNMaterial()
+        trunkMat.diffuse.contents = UIColor(red: 0.40, green: 0.27, blue: 0.16, alpha: 1)
+        trunkMat.lightingModel = .physicallyBased
+        trunkMat.roughness.contents = 0.9
+        trunk.materials = [trunkMat]
+        let trunkNode = SCNNode(geometry: trunk)
+        trunkNode.position.y = 0.17
+        root.addChildNode(trunkNode)
+
+        let foliageMat = SCNMaterial()
+        foliageMat.diffuse.contents = UIColor(red: 0.24, green: 0.46, blue: 0.26, alpha: 1)
+        foliageMat.lightingModel = .physicallyBased
+        foliageMat.roughness.contents = 0.95
+
+        let lower = SCNCone(topRadius: 0, bottomRadius: 0.38, height: 0.6)
+        lower.radialSegmentCount = 7
+        lower.materials = [foliageMat]
+        let lowerNode = SCNNode(geometry: lower)
+        lowerNode.position.y = 0.6
+        root.addChildNode(lowerNode)
+
+        let upper = SCNCone(topRadius: 0, bottomRadius: 0.28, height: 0.5)
+        upper.radialSegmentCount = 7
+        upper.materials = [foliageMat]
+        let upperNode = SCNNode(geometry: upper)
+        upperNode.position.y = 0.95
+        root.addChildNode(upperNode)
+
+        root.scale = SCNVector3(scale, scale, scale)
+        return root
     }
 
     // MARK: - Rebuild
@@ -241,25 +315,11 @@ final class MountainSceneCoordinator: NSObject {
         }
         faceMaterials = []
 
-        // One single smooth, high-poly mountain mesh (no chunky frustum stack).
-        let mesh = smoothMountainGeometry(colors: colors)
+        // One single low-poly faceted snowy-rock mountain mesh.
+        let mesh = facetedMountainGeometry()
         let meshNode = SCNNode(geometry: mesh)
         meshNode.name = "mountainMesh"
         mountainPivot.addChildNode(meshNode)
-
-        // Snow cap (small white cone on top)
-        let bottomRadius = radiusAt(0.97)
-        let cap = SCNCone(topRadius: 0.04, bottomRadius: CGFloat(bottomRadius * 1.2), height: 0.7)
-        cap.radialSegmentCount = 48
-        let snow = SCNMaterial()
-        snow.diffuse.contents = UIColor(white: 0.97, alpha: 1)
-        snow.lightingModel = .physicallyBased
-        snow.roughness.contents = 0.6
-        snow.metalness.contents = 0.0
-        cap.materials = [snow]
-        let capNode = SCNNode(geometry: cap)
-        capNode.position.y = heightAt(0.97) + 0.3
-        mountainPivot.addChildNode(capNode)
 
         // Beacon at zenit
         let beacon = SCNNode(geometry: SCNSphere(radius: 0.18))
@@ -346,98 +406,122 @@ final class MountainSceneCoordinator: NSObject {
 
     // MARK: - Mountain profile
 
-    /// Smooth, curved radius profile so the silhouette tapers organically (no chunky steps).
+    /// Craggy radius profile that tapers sharply to a single peak (diorama silhouette).
     private func radiusAt(_ t: Float) -> Float {
         let tc = max(0, min(1, t))
-        return baseRadius * pow(1 - tc, 1.25) + 0.06
+        return baseRadius * pow(1 - tc, 1.32) + 0.04
     }
 
     private func heightAt(_ t: Float) -> Float {
         max(0, min(1, t)) * summit
     }
 
-    /// Subtle deterministic ridge displacement (smooth, repeatable across rebuilds).
-    private func ridgeNoise(angle: Float, t: Float) -> Float {
-        let a = sin(angle * 3.0 + t * 4.0) * 0.035
-        let b = sin(angle * 7.0 - t * 2.0) * 0.018
-        return 1 + (a + b) * (1 - t * 0.6)
+    /// Deterministic hash noise in 0..1 for a given grid cell (repeatable across rebuilds).
+    private func hashNoise(_ i: Int, _ j: Int) -> Float {
+        let s = sin(Float(i) * 127.1 + Float(j) * 311.7) * 43758.5453
+        return s - floor(s)
     }
 
-    /// Builds a single high-resolution, smooth-shaded mountain with one colored
-    /// wedge per subject. Normals are computed analytically for soft shading.
-    private func smoothMountainGeometry(colors: [UIColor]) -> SCNGeometry {
-        let segs = max(3, colors.count)
-        let angularPerFace = 8
-        let angular = segs * angularPerFace
-        let rings = 26
+    private func smoothstep(_ edge0: Float, _ edge1: Float, _ x: Float) -> Float {
+        let t = max(0, min(1, (x - edge0) / (edge1 - edge0)))
+        return t * t * (3 - 2 * t)
+    }
+
+    /// Builds a single low-poly, flat-shaded mountain: grey rock at the base blending
+    /// to white snow toward the peak, with crisp triangular facets (diorama style).
+    private func facetedMountainGeometry() -> SCNGeometry {
+        let angular = 13
+        let rings = 12
         let pi2 = Float.pi * 2
+
+        // Pre-compute a stable displaced grid so triangle seams always match.
+        func point(_ ring: Int, _ col: Int) -> SCNVector3 {
+            let t = Float(ring) / Float(rings)
+            if ring >= rings { return SCNVector3(0, summit, 0) } // shared apex
+            let baseR = radiusAt(t)
+            let a = Float(col % angular) / Float(angular) * pi2
+            let n = hashNoise(ring, col % angular)
+            let radial = baseR * (1 + (n - 0.5) * 0.42 * (1 - t * 0.4))
+            let yJitter = (hashNoise(col % angular, ring) - 0.5) * 0.5 * t
+            return SCNVector3(radial * cos(a), heightAt(t) + yJitter, radial * sin(a))
+        }
 
         var vertices: [SCNVector3] = []
         var normals: [SCNVector3] = []
-        vertices.reserveCapacity((rings + 1) * angular)
-        normals.reserveCapacity((rings + 1) * angular)
+        var colorComps: [Float] = []
+        var indices: [Int32] = []
 
-        func index(_ ring: Int, _ col: Int) -> Int32 { Int32(ring * angular + (col % angular)) }
+        let rock = SIMD3<Float>(0.60, 0.62, 0.66)
+        let rockDark = SIMD3<Float>(0.42, 0.44, 0.48)
+        let snow = SIMD3<Float>(0.96, 0.97, 1.0)
 
-        for ring in 0...rings {
-            let t = Float(ring) / Float(rings)
-            let r = radiusAt(t)
-            let y = heightAt(t)
-            let dt: Float = 0.01
-            let rPrime = (radiusAt(t + dt) - radiusAt(t - dt)) / (2 * dt)
-            let hPrime = (heightAt(t + dt) - heightAt(t - dt)) / (2 * dt)
-            for col in 0..<angular {
-                let a = Float(col) / Float(angular) * pi2
-                let rr = r * ridgeNoise(angle: a, t: t)
-                let p = SCNVector3(rr * cos(a), y, rr * sin(a))
+        func emit(_ a: SCNVector3, _ b: SCNVector3, _ c: SCNVector3, snowAmt: Float, shade: Float) {
+            // Flat normal for the triangle.
+            let ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z
+            let vx = c.x - a.x, vy = c.y - a.y, vz = c.z - a.z
+            var nx = uy * vz - uz * vy
+            var ny = uz * vx - ux * vz
+            var nz = ux * vy - uy * vx
+            let len = sqrt(nx * nx + ny * ny + nz * nz)
+            if len > 0 { nx /= len; ny /= len; nz /= len }
+            let rockMix = mix(rockDark, rock, t: shade)
+            let col = mix(rockMix, snow, t: snowAmt)
+            for p in [a, b, c] {
                 vertices.append(p)
-                var nx = hPrime * cos(a)
-                let ny = -rPrime
-                var nz = hPrime * sin(a)
-                let len = sqrt(nx * nx + ny * ny + nz * nz)
-                if len > 0 { nx /= len; nz /= len }
-                let nyN = len > 0 ? ny / len : 1
-                normals.append(SCNVector3(nx, nyN, nz))
+                normals.append(SCNVector3(nx, ny, nz))
+                colorComps.append(contentsOf: [col.x, col.y, col.z, 1])
+                indices.append(Int32(indices.count))
             }
         }
 
-        var perFaceIndices: [[Int32]] = Array(repeating: [], count: segs)
         for ring in 0..<rings {
+            let tMid = (Float(ring) + 0.5) / Float(rings)
             for col in 0..<angular {
-                let face = (col / angularPerFace) % segs
-                let a = index(ring, col)
-                let b = index(ring, col + 1)
-                let c = index(ring + 1, col)
-                let d = index(ring + 1, col + 1)
-                perFaceIndices[face].append(contentsOf: [a, c, b, b, c, d])
+                let p00 = point(ring, col)
+                let p01 = point(ring, col + 1)
+                let p10 = point(ring + 1, col)
+                let p11 = point(ring + 1, col + 1)
+                // Snow: concentrated near the peak, with vertical streaks running down gullies.
+                let streak = hashNoise(0, col % angular)
+                let snowBase = smoothstep(0.42, 0.82, tMid)
+                let snowStreak = smoothstep(0.55, 1.0, streak) * smoothstep(0.2, 0.7, tMid)
+                let snowAmt = max(snowBase, snowStreak)
+                let shade = 0.55 + hashNoise(ring, col % angular) * 0.45
+                if ring == rings - 1 {
+                    emit(p00, p01, p10, snowAmt: snowAmt, shade: shade) // converge to apex p10==p11
+                } else {
+                    emit(p00, p10, p01, snowAmt: snowAmt, shade: shade)
+                    emit(p01, p10, p11, snowAmt: snowAmt, shade: shade)
+                }
             }
         }
 
         let vSource = SCNGeometrySource(vertices: vertices)
         let nSource = SCNGeometrySource(normals: normals)
-        var elements: [SCNGeometryElement] = []
-        var materials: [SCNMaterial] = []
-        for face in 0..<segs {
-            let idx = perFaceIndices[face]
-            let data = Data(bytes: idx, count: idx.count * MemoryLayout<Int32>.size)
-            let elem = SCNGeometryElement(data: data, primitiveType: .triangles, primitiveCount: idx.count / 3, bytesPerIndex: MemoryLayout<Int32>.size)
-            elements.append(elem)
+        let colorData = Data(bytes: colorComps, count: colorComps.count * MemoryLayout<Float>.size)
+        let cSource = SCNGeometrySource(
+            data: colorData,
+            semantic: .color,
+            vectorCount: vertices.count,
+            usesFloatComponents: true,
+            componentsPerVector: 4,
+            bytesPerComponent: MemoryLayout<Float>.size,
+            dataOffset: 0,
+            dataStride: MemoryLayout<Float>.size * 4
+        )
+        let data = Data(bytes: indices, count: indices.count * MemoryLayout<Int32>.size)
+        let elem = SCNGeometryElement(data: data, primitiveType: .triangles, primitiveCount: indices.count / 3, bytesPerIndex: MemoryLayout<Int32>.size)
 
-            let mat = SCNMaterial()
-            // Premium matte natural look: subtle subject identity blended toward a mossy
-            // green/earth so faces stay distinguishable without garish color.
-            let moss = UIColor(red: 0.34, green: 0.46, blue: 0.30, alpha: 1)
-            let baseColor = colors[face % colors.count].mixed(with: moss, t: 0.52)
-            mat.diffuse.contents = baseColor
-            mat.lightingModel = .physicallyBased
-            mat.roughness.contents = 0.95
-            mat.metalness.contents = 0.0
-            mat.isDoubleSided = true
-            materials.append(mat)
-            faceMaterials.append(mat)
-        }
-        let geo = SCNGeometry(sources: [vSource, nSource], elements: elements)
-        geo.materials = materials
+        let mat = SCNMaterial()
+        mat.diffuse.contents = UIColor.white
+        mat.lightingModel = .physicallyBased
+        mat.roughness.contents = 0.9
+        mat.metalness.contents = 0.0
+        mat.isDoubleSided = false
+        faceMaterials = [mat]
+
+        let geo = SCNGeometry(sources: [vSource, nSource, cSource], elements: [elem])
+        geo.materials = [mat]
         return geo
     }
 

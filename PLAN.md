@@ -21,11 +21,11 @@
 - Una vista compacta de tu **próxima actividad** de la agenda.
 - Debajo, tus tareas y evaluaciones del día, sin desorden.
 
-### 4. Rediseño de la Montaña — Estilo Minimalista Premium (Smooth Low-Poly)
+### 4. Rediseño de la Montaña — Diorama Low-Poly (pico rocoso nevado)
 
-- **Pasto estático en la base:** la montaña emerge de un suelo de pasto liso y continuo. Todo el mecanismo de giro queda enterrado e invisible bajo el pasto.
-- **Solo gira la montaña:** al deslizar de lado, únicamente la montaña rota sobre su eje; tú te sientes parado firme sobre el pasto viéndola girar.
-- **Superficie suave y pulida:** se eliminan los bordes triangulares toscos; las laderas se ven continuas, mate y elegantes (sin luces neón ni destellos artificiales).
+- **Diorama sobre base de madera:** la montaña se asienta en una plataforma circular de madera con borde oscuro, con un faldón de pasto verde abrazando su base y un par de pinos low-poly. Cielo azul suave de fondo.
+- **Pico rocoso facetado:** roca gris facetada (low-poly) que transiciona a nieve blanca hacia la cima, con vetas de nieve bajando por las laderas, hasta una sola cumbre puntiaguda.
+- **Solo gira la montaña:** al deslizar de lado, únicamente la montaña rota sobre su eje; la base de madera, el pasto y los pinos quedan estáticos.
 - **Sendero estilo Duolingo:** un camino curvo y suave con nodos circulares sutiles y planos, integrados de forma natural en tonos tierra, coherentes con la vegetación.
 - **Niebla de progreso (estilo Candy Crush):** una neblina blanca suave cubre el tercio superior y se disipa hacia arriba a medida que avanzas y desbloqueas niveles.
 - **Cámara a nivel del suelo:** empiezas viendo desde la base, y la cámara sube suavemente por la montaña conforme completas tus bloques de enfoque.
