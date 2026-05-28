@@ -363,7 +363,7 @@ final class MountainSceneCoordinator: NSObject {
         faceMaterials = []
 
         // One single smooth-shaded snowy-rock mountain mesh (premium matte porcelain).
-        let mesh = smoothMountainGeometry()
+        let mesh = porcelainMountainGeometry()
         let meshNode = SCNNode(geometry: mesh)
         meshNode.name = "mountainMesh"
         mountainPivot.addChildNode(meshNode)
@@ -474,85 +474,106 @@ final class MountainSceneCoordinator: NSObject {
         return t * t * (3 - 2 * t)
     }
 
-    /// Builds a clean LOW-POLY mountain: a small number of chunky facets, grey rock at
-    /// the base stepping up to white snow near the peak. Each triangle gets its own
-    /// flat normal (per-face shading) so the silhouette reads as a stylized diorama,
-    /// not a heavily-rendered surface.
-    private func smoothMountainGeometry() -> SCNGeometry {
-        // Deliberately coarse: few sides, few rings → bold low-poly facets.
-        let angular = 9
-        let rings = 5
+    /// Builds a PREMIUM SMOOTH-SHADED mountain: a shared-vertex grid with averaged
+    /// vertex normals so the slopes read as continuous matte-porcelain surfaces (no
+    /// blocky flat facets). Grey rock at the base flows smoothly up into white snow.
+    private func porcelainMountainGeometry() -> SCNGeometry {
+        // Moderate density: smooth, continuous silhouette without over-tessellating.
+        let angular = 48
+        let rings = 14
         let pi2 = Float.pi * 2
         let rf = Float(rings)
 
-        // Subtle, stable radial wobble so each facet differs without looking noisy.
-        func radialNoise(_ ring: Int, _ col: Int) -> Float {
-            let c = ((col % angular) + angular) % angular
+        // Gentle, stable radial undulation for organic — but smooth — slopes.
+        func radialFactor(_ ring: Int, _ col: Int) -> Float {
             let t = Float(ring) / rf
-            return (hashNoise(ring, c) - 0.5) * 0.18 * (1 - t * 0.5)
+            let a = Float(col) / Float(angular) * pi2
+            // Two low-frequency sine lobes keep the form soft and continuous.
+            let lobes = sin(a * 3) * 0.05 + sin(a * 5 + 1.3) * 0.03
+            return 1 + lobes * (1 - t * 0.6)
         }
 
         func point(_ ring: Int, _ col: Int) -> SCNVector3 {
             let t = Float(ring) / rf
             let a = Float(col) / Float(angular) * pi2
-            let radial = radiusAt(t) * (1 + radialNoise(ring, col))
+            let radial = radiusAt(t) * radialFactor(ring, col)
             return SCNVector3(radial * cos(a) * stretchX, heightAt(t), radial * sin(a) * stretchZ)
         }
 
-        // Build flat-shaded triangles: every triangle owns its 3 vertices + one normal.
+        // Shared vertex grid: (rings+1) rows including the apex row collapsed at top.
+        // We keep `angular` columns per ring (duplicated seam column to wrap colors/normals).
+        let cols = angular + 1
         var positions: [SCNVector3] = []
-        var normals: [SCNVector3] = []
         var colorComps: [Float] = []
-        var indices: [Int32] = []
 
         let rock = SIMD3<Float>(0.60, 0.62, 0.67)
         let rockDark = SIMD3<Float>(0.44, 0.46, 0.51)
         let snow = SIMD3<Float>(0.97, 0.98, 1.0)
 
-        func snowAmount(_ ring: Int) -> Float {
-            smoothstep(0.55, 0.9, Float(ring) / rf)
+        func snowAmount(_ t: Float) -> Float { smoothstep(0.52, 0.88, t) }
+
+        func colorAt(_ ring: Int) -> SIMD3<Float> {
+            let t = Float(ring) / rf
+            // Smooth vertical banding between dark & light rock, then blend to snow.
+            let band = 0.5 + 0.5 * sin(t * 7.0)
+            let rockMix = mix(rockDark, rock, t: band * 0.65 + 0.2)
+            return mix(rockMix, snow, t: snowAmount(t))
         }
 
-        func addTriangle(_ p0: SCNVector3, _ p1: SCNVector3, _ p2: SCNVector3, ringForColor: Int, shadeSeed: Int) {
-            // Flat per-face normal.
-            let u = SIMD3<Float>(p1.x - p0.x, p1.y - p0.y, p1.z - p0.z)
-            let v = SIMD3<Float>(p2.x - p0.x, p2.y - p0.y, p2.z - p0.z)
-            var n = SIMD3<Float>(u.y * v.z - u.z * v.y, u.z * v.x - u.x * v.z, u.x * v.y - u.y * v.x)
-            let len = sqrt(n.x * n.x + n.y * n.y + n.z * n.z)
-            if len > 0 { n /= len } else { n = SIMD3<Float>(0, 1, 0) }
-
-            // One flat color per facet (rock→snow), with a faint per-facet shade.
-            let shade = 0.78 + hashNoise(shadeSeed, ringForColor) * 0.22
-            let rockMix = mix(rockDark, rock, t: shade)
-            let c = mix(rockMix, snow, t: snowAmount(ringForColor))
-
-            let base = Int32(positions.count)
-            for p in [p0, p1, p2] {
-                positions.append(p)
-                normals.append(SCNVector3(n.x, n.y, n.z))
+        // Generate vertices ring by ring (apex handled as the final collapsed ring).
+        for ring in 0...rings {
+            let c = colorAt(ring)
+            for col in 0..<cols {
+                if ring == rings {
+                    positions.append(SCNVector3(0, summit, 0))
+                } else {
+                    positions.append(point(ring, col))
+                }
                 colorComps.append(contentsOf: [c.x, c.y, c.z, 1])
             }
-            indices.append(contentsOf: [base, base + 1, base + 2])
         }
 
-        // Side bands between rings.
-        for ring in 0..<(rings - 1) {
+        func idx(_ ring: Int, _ col: Int) -> Int32 { Int32(ring * cols + col) }
+
+        // Averaged vertex normals (smooth shading).
+        var accum = [SIMD3<Float>](repeating: SIMD3<Float>(0, 0, 0), count: positions.count)
+        var indices: [Int32] = []
+        func emit(_ i0: Int32, _ i1: Int32, _ i2: Int32) {
+            indices.append(contentsOf: [i0, i1, i2])
+            let p0 = positions[Int(i0)], p1 = positions[Int(i1)], p2 = positions[Int(i2)]
+            let u = SIMD3<Float>(p1.x - p0.x, p1.y - p0.y, p1.z - p0.z)
+            let v = SIMD3<Float>(p2.x - p0.x, p2.y - p0.y, p2.z - p0.z)
+            let n = SIMD3<Float>(u.y * v.z - u.z * v.y, u.z * v.x - u.x * v.z, u.x * v.y - u.y * v.x)
+            accum[Int(i0)] += n; accum[Int(i1)] += n; accum[Int(i2)] += n
+        }
+
+        for ring in 0..<rings {
             for col in 0..<angular {
-                let a = point(ring, col)
-                let b = point(ring, col + 1)
-                let c = point(ring + 1, col)
-                let d = point(ring + 1, col + 1)
-                addTriangle(a, c, b, ringForColor: ring, shadeSeed: col * 2)
-                addTriangle(b, c, d, ringForColor: ring + 1, shadeSeed: col * 2 + 1)
+                let a = idx(ring, col)
+                let b = idx(ring, col + 1)
+                let c = idx(ring + 1, col)
+                let d = idx(ring + 1, col + 1)
+                emit(a, c, b)
+                emit(b, c, d)
             }
         }
-        // Fan to the single apex (snow cap).
-        let apex = SCNVector3(0, summit, 0)
-        let topRing = rings - 1
-        for col in 0..<angular {
-            let a = point(topRing, col)
-            let b = point(topRing, col + 1)
-            addTriangle(a, apex, b, ringForColor: rings, shadeSeed: col)
+
+        // Weld the seam: average the duplicated first/last column normals so there's
+        // no visible shading crease where the mesh wraps.
+        for ring in 0...rings {
+            let first = Int(idx(ring, 0))
+            let last = Int(idx(ring, angular))
+            let merged = accum[first] + accum[last]
+            accum[first] = merged
+            accum[last] = merged
+        }
+
+        var normals: [SCNVector3] = []
+        normals.reserveCapacity(positions.count)
+        for n in accum {
+            let len = sqrt(n.x * n.x + n.y * n.y + n.z * n.z)
+            if len > 1e-5 { normals.append(SCNVector3(n.x / len, n.y / len, n.z / len)) }
+            else { normals.append(SCNVector3(0, 1, 0)) }
         }
 
         let vSource = SCNGeometrySource(vertices: positions)
@@ -574,7 +595,8 @@ final class MountainSceneCoordinator: NSObject {
         let mat = SCNMaterial()
         mat.diffuse.contents = UIColor.white
         mat.lightingModel = .physicallyBased
-        mat.roughness.contents = 0.9
+        // Matte porcelain: high roughness, no metalness, with a soft sheen via low specular.
+        mat.roughness.contents = 0.78
         mat.metalness.contents = 0.0
         mat.isDoubleSided = false
         faceMaterials = [mat]
