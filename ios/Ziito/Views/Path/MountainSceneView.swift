@@ -261,22 +261,29 @@ final class MountainSceneCoordinator: NSObject {
         // surrounding forest instead of being stuck onto the slopes.
         let footR = baseRadius
         let treeSpots: [(angle: Float, r: Float, s: Float)] = [
-            (0.55, footR + 2.4, 1.0),
-            (1.15, footR + 2.9, 0.82),
-            (1.85, footR + 2.5, 0.7),
-            (2.45, footR + 2.95, 0.95),
-            (3.05, footR + 2.6, 0.78),
-            (3.75, footR + 2.85, 1.05),
-            (4.35, footR + 2.5, 0.72),
-            (5.05, footR + 2.95, 0.9),
-            (5.65, footR + 2.6, 0.8),
-            (6.05, footR + 2.85, 0.68)
+            (0.55, footR + 2.4, 1.18),
+            (1.15, footR + 2.9, 0.74),
+            (1.85, footR + 2.5, 0.58),
+            (2.45, footR + 2.95, 1.05),
+            (3.05, footR + 2.6, 0.66),
+            (3.75, footR + 2.85, 1.32),
+            (4.35, footR + 2.5, 0.62),
+            (5.05, footR + 2.95, 0.96),
+            (5.65, footR + 2.6, 0.82),
+            (6.05, footR + 2.85, 0.54),
+            (0.9, footR + 3.4, 0.7),
+            (2.1, footR + 3.5, 0.9),
+            (4.0, footR + 3.45, 0.6),
+            (5.4, footR + 3.5, 1.1)
         ]
         for spot in treeSpots {
             let jitter = hashNoise(Int(spot.angle * 97), Int(spot.r * 53)) * 0.5 - 0.25
             let a = spot.angle + jitter
-            let tree = buildPineTree(scale: spot.s)
+            // Per-tree tone (cool vs. warm green) so the forest isn't a flat color.
+            let tone = hashNoise(Int(spot.angle * 53), Int(spot.r * 31))
+            let tree = buildPineTree(scale: spot.s, tone: tone)
             tree.position = SCNVector3(spot.r * cos(a), 0.05, spot.r * sin(a))
+            tree.eulerAngles.y = hashNoise(Int(spot.r * 71), Int(spot.angle * 19)) * Float.pi * 2
             groundParent.addChildNode(tree)
         }
 
@@ -284,25 +291,27 @@ final class MountainSceneCoordinator: NSObject {
         buildAltarStructure()
     }
 
-    /// A winding stone-slab path crossing the grass apron from the front edge toward
-    /// the foot of the mountain. Flat, earth-toned, no glow.
+    /// A winding stone-slab path crossing the grass apron from the front edge straight
+    /// up to the foot of the front-facing slope, finishing at a trailhead marker that
+    /// connects to the mountain's milestone trail. Flat, earth-toned, no glow.
     private func buildGroundPath() {
         let pathRoot = SCNNode()
-        // Curve from the front rim of the grass inward toward the mountain foot.
+        // The mountain snaps so a face's trail sits at the front (+Z) toward the camera.
+        let baseAngle = Float.pi / 2
+        // Curve from the front rim of the grass inward, landing exactly at the foot.
         let startR = baseRadius + 3.0
-        let endR = baseRadius + 0.5
-        let steps = 14
+        let endR = baseRadius + 0.12
+        let steps = 16
         for i in 0...steps {
             let f = Float(i) / Float(steps)
             let r = startR * (1 - f) + endR * f
-            // Gentle S-curve sideways as it approaches the mountain.
-            let lateral = sin(f * Float.pi * 1.6) * 0.9
-            // Path heads toward the front of the camera (positive Z).
-            let baseAngle = Float.pi / 2
+            // Gentle S-curve that resolves back to center as it reaches the mountain,
+            // so the path lines up with the trailhead instead of drifting sideways.
+            let lateral = sin(f * Float.pi * 1.6) * 0.9 * (1 - f * f)
             let x = r * cos(baseAngle) + lateral
             let z = r * sin(baseAngle)
 
-            let slab = SCNCylinder(radius: CGFloat(0.46 - f * 0.12), height: 0.06)
+            let slab = SCNCylinder(radius: CGFloat(0.46 - f * 0.16), height: 0.06)
             slab.radialSegmentCount = 12
             let m = SCNMaterial()
             let tone = 0.62 + hashNoise(i, 7) * 0.12
@@ -316,6 +325,33 @@ final class MountainSceneCoordinator: NSObject {
             n.eulerAngles.y = hashNoise(i, 3) * 0.6 - 0.3
             pathRoot.addChildNode(n)
         }
+
+        // Trailhead: a flat circular marker at the mountain foot where the ground path
+        // meets the milestone trail climbing the slope. Matches the trail-node style.
+        let footR = baseRadius + 0.05
+        let headX = footR * cos(baseAngle)
+        let headZ = footR * sin(baseAngle)
+        let disc = SCNCylinder(radius: 0.3, height: 0.05)
+        disc.radialSegmentCount = 24
+        let dm = SCNMaterial()
+        dm.diffuse.contents = UIColor(red: 0.70, green: 0.56, blue: 0.36, alpha: 1)
+        dm.lightingModel = .physicallyBased
+        dm.roughness.contents = 0.8
+        disc.materials = [dm]
+        let discNode = SCNNode(geometry: disc)
+        discNode.position = SCNVector3(headX, 0.08, headZ)
+        pathRoot.addChildNode(discNode)
+
+        let ring = SCNTorus(ringRadius: 0.3, pipeRadius: 0.035)
+        let rm = SCNMaterial()
+        rm.diffuse.contents = UIColor(white: 0.92, alpha: 1)
+        rm.lightingModel = .physicallyBased
+        rm.roughness.contents = 0.6
+        ring.materials = [rm]
+        let ringNode = SCNNode(geometry: ring)
+        ringNode.position = SCNVector3(headX, 0.085, headZ)
+        pathRoot.addChildNode(ringNode)
+
         groundParent.addChildNode(pathRoot)
     }
 
@@ -347,8 +383,10 @@ final class MountainSceneCoordinator: NSObject {
         altarRoot.addChildNode(capNode)
     }
 
-    /// A stylized low-poly pine: a short trunk topped with two stacked green cones.
-    private func buildPineTree(scale: Float) -> SCNNode {
+    /// A stylized low-poly pine: a short trunk topped with two (sometimes three) stacked
+    /// green cones. `tone` (0..1) shifts the foliage between a cool deep green and a
+    /// warmer light green so the surrounding forest reads as varied and natural.
+    private func buildPineTree(scale: Float, tone: Float = 0.5) -> SCNNode {
         let root = SCNNode()
 
         let trunk = SCNCylinder(radius: 0.08, height: 0.34)
@@ -362,8 +400,12 @@ final class MountainSceneCoordinator: NSObject {
         trunkNode.position.y = 0.17
         root.addChildNode(trunkNode)
 
+        // Blend foliage color by tone: deep blue-green → bright yellow-green.
+        let coolGreen = SIMD3<Float>(0.16, 0.40, 0.22)
+        let warmGreen = SIMD3<Float>(0.36, 0.56, 0.28)
+        let fc = mix(coolGreen, warmGreen, t: tone)
         let foliageMat = SCNMaterial()
-        foliageMat.diffuse.contents = UIColor(red: 0.24, green: 0.46, blue: 0.26, alpha: 1)
+        foliageMat.diffuse.contents = UIColor(red: CGFloat(fc.x), green: CGFloat(fc.y), blue: CGFloat(fc.z), alpha: 1)
         foliageMat.lightingModel = .physicallyBased
         foliageMat.roughness.contents = 0.95
 
@@ -380,6 +422,16 @@ final class MountainSceneCoordinator: NSObject {
         let upperNode = SCNNode(geometry: upper)
         upperNode.position.y = 0.95
         root.addChildNode(upperNode)
+
+        // Taller trees get a third tier for silhouette variety.
+        if tone > 0.6 {
+            let top = SCNCone(topRadius: 0, bottomRadius: 0.19, height: 0.4)
+            top.radialSegmentCount = 7
+            top.materials = [foliageMat]
+            let topNode = SCNNode(geometry: top)
+            topNode.position.y = 1.25
+            root.addChildNode(topNode)
+        }
 
         root.scale = SCNVector3(scale, scale, scale)
         return root
