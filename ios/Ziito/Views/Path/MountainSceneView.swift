@@ -474,20 +474,22 @@ final class MountainSceneCoordinator: NSObject {
         return t * t * (3 - 2 * t)
     }
 
-    /// Builds a single smooth-shaded mountain: grey rock at the base blending to white
-    /// snow toward the peak. Uses a shared vertex grid with averaged per-vertex normals
-    /// so the surface reads as a clean, continuous matte-porcelain slope (no flat facets).
+    /// Builds a clean LOW-POLY mountain: a small number of chunky facets, grey rock at
+    /// the base stepping up to white snow near the peak. Each triangle gets its own
+    /// flat normal (per-face shading) so the silhouette reads as a stylized diorama,
+    /// not a heavily-rendered surface.
     private func smoothMountainGeometry() -> SCNGeometry {
-        let angular = 56
-        let rings = 18
+        // Deliberately coarse: few sides, few rings → bold low-poly facets.
+        let angular = 9
+        let rings = 5
         let pi2 = Float.pi * 2
         let rf = Float(rings)
 
-        // Stable radial displacement; gentle so the silhouette stays clean & premium.
+        // Subtle, stable radial wobble so each facet differs without looking noisy.
         func radialNoise(_ ring: Int, _ col: Int) -> Float {
             let c = ((col % angular) + angular) % angular
             let t = Float(ring) / rf
-            return (hashNoise(ring, c) - 0.5) * 0.22 * (1 - t * 0.45)
+            return (hashNoise(ring, c) - 0.5) * 0.18 * (1 - t * 0.5)
         }
 
         func point(_ ring: Int, _ col: Int) -> SCNVector3 {
@@ -497,76 +499,60 @@ final class MountainSceneCoordinator: NSObject {
             return SCNVector3(radial * cos(a) * stretchX, heightAt(t), radial * sin(a) * stretchZ)
         }
 
-        // Shared vertex grid (ring × col) + a single apex vertex.
+        // Build flat-shaded triangles: every triangle owns its 3 vertices + one normal.
         var positions: [SCNVector3] = []
-        positions.reserveCapacity(rings * angular + 1)
-        for ring in 0..<rings {
-            for col in 0..<angular {
-                positions.append(point(ring, col))
-            }
-        }
-        let apexIndex = positions.count
-        positions.append(SCNVector3(0, summit, 0))
-
-        func gridIndex(_ ring: Int, _ col: Int) -> Int {
-            ring * angular + ((col % angular + angular) % angular)
-        }
-
-        // Triangles (outward winding) between adjacent rings, then a fan to the apex.
+        var normals: [SCNVector3] = []
+        var colorComps: [Float] = []
         var indices: [Int32] = []
-        for ring in 0..<(rings - 1) {
-            for col in 0..<angular {
-                let a = gridIndex(ring, col)
-                let b = gridIndex(ring, col + 1)
-                let c = gridIndex(ring + 1, col)
-                let d = gridIndex(ring + 1, col + 1)
-                indices.append(contentsOf: [Int32(a), Int32(c), Int32(b)])
-                indices.append(contentsOf: [Int32(b), Int32(c), Int32(d)])
-            }
-        }
-        let topRing = rings - 1
-        for col in 0..<angular {
-            let a = gridIndex(topRing, col)
-            let b = gridIndex(topRing, col + 1)
-            indices.append(contentsOf: [Int32(a), Int32(apexIndex), Int32(b)])
+
+        let rock = SIMD3<Float>(0.60, 0.62, 0.67)
+        let rockDark = SIMD3<Float>(0.44, 0.46, 0.51)
+        let snow = SIMD3<Float>(0.97, 0.98, 1.0)
+
+        func snowAmount(_ ring: Int) -> Float {
+            smoothstep(0.55, 0.9, Float(ring) / rf)
         }
 
-        // Accumulate face normals into shared vertices, then normalize → smooth shading.
-        var accum = [SIMD3<Float>](repeating: .zero, count: positions.count)
-        var k = 0
-        while k < indices.count {
-            let i0 = Int(indices[k]), i1 = Int(indices[k + 1]), i2 = Int(indices[k + 2])
-            let p0 = positions[i0], p1 = positions[i1], p2 = positions[i2]
+        func addTriangle(_ p0: SCNVector3, _ p1: SCNVector3, _ p2: SCNVector3, ringForColor: Int, shadeSeed: Int) {
+            // Flat per-face normal.
             let u = SIMD3<Float>(p1.x - p0.x, p1.y - p0.y, p1.z - p0.z)
             let v = SIMD3<Float>(p2.x - p0.x, p2.y - p0.y, p2.z - p0.z)
-            let n = SIMD3<Float>(u.y * v.z - u.z * v.y, u.z * v.x - u.x * v.z, u.x * v.y - u.y * v.x)
-            accum[i0] += n; accum[i1] += n; accum[i2] += n
-            k += 3
-        }
-        let normals: [SCNVector3] = accum.map {
-            let len = sqrt($0.x * $0.x + $0.y * $0.y + $0.z * $0.z)
-            guard len > 0 else { return SCNVector3(0, 1, 0) }
-            return SCNVector3($0.x / len, $0.y / len, $0.z / len)
+            var n = SIMD3<Float>(u.y * v.z - u.z * v.y, u.z * v.x - u.x * v.z, u.x * v.y - u.y * v.x)
+            let len = sqrt(n.x * n.x + n.y * n.y + n.z * n.z)
+            if len > 0 { n /= len } else { n = SIMD3<Float>(0, 1, 0) }
+
+            // One flat color per facet (rock→snow), with a faint per-facet shade.
+            let shade = 0.78 + hashNoise(shadeSeed, ringForColor) * 0.22
+            let rockMix = mix(rockDark, rock, t: shade)
+            let c = mix(rockMix, snow, t: snowAmount(ringForColor))
+
+            let base = Int32(positions.count)
+            for p in [p0, p1, p2] {
+                positions.append(p)
+                normals.append(SCNVector3(n.x, n.y, n.z))
+                colorComps.append(contentsOf: [c.x, c.y, c.z, 1])
+            }
+            indices.append(contentsOf: [base, base + 1, base + 2])
         }
 
-        // Per-vertex vertex colors: rock blending to snow toward the peak + soft streaks.
-        let rock = SIMD3<Float>(0.62, 0.64, 0.69)
-        let rockDark = SIMD3<Float>(0.46, 0.48, 0.53)
-        let snow = SIMD3<Float>(0.97, 0.98, 1.0)
-        var colorComps: [Float] = []
-        colorComps.reserveCapacity(positions.count * 4)
-        for vi in 0..<positions.count {
-            let ring = vi == apexIndex ? rings : vi / angular
-            let col = vi == apexIndex ? 0 : vi % angular
-            let t = Float(ring) / rf
-            let streak = hashNoise(0, col % angular)
-            let snowBase = smoothstep(0.46, 0.86, t)
-            let snowStreak = smoothstep(0.58, 1.0, streak) * smoothstep(0.24, 0.74, t)
-            let snowAmt = max(snowBase, snowStreak)
-            let shade = 0.72 + hashNoise(ring, col % angular) * 0.28
-            let rockMix = mix(rockDark, rock, t: shade)
-            let c = mix(rockMix, snow, t: snowAmt)
-            colorComps.append(contentsOf: [c.x, c.y, c.z, 1])
+        // Side bands between rings.
+        for ring in 0..<(rings - 1) {
+            for col in 0..<angular {
+                let a = point(ring, col)
+                let b = point(ring, col + 1)
+                let c = point(ring + 1, col)
+                let d = point(ring + 1, col + 1)
+                addTriangle(a, c, b, ringForColor: ring, shadeSeed: col * 2)
+                addTriangle(b, c, d, ringForColor: ring + 1, shadeSeed: col * 2 + 1)
+            }
+        }
+        // Fan to the single apex (snow cap).
+        let apex = SCNVector3(0, summit, 0)
+        let topRing = rings - 1
+        for col in 0..<angular {
+            let a = point(topRing, col)
+            let b = point(topRing, col + 1)
+            addTriangle(a, apex, b, ringForColor: rings, shadeSeed: col)
         }
 
         let vSource = SCNGeometrySource(vertices: positions)
@@ -588,7 +574,7 @@ final class MountainSceneCoordinator: NSObject {
         let mat = SCNMaterial()
         mat.diffuse.contents = UIColor.white
         mat.lightingModel = .physicallyBased
-        mat.roughness.contents = 0.82
+        mat.roughness.contents = 0.9
         mat.metalness.contents = 0.0
         mat.isDoubleSided = false
         faceMaterials = [mat]
