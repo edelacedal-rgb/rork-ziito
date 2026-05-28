@@ -1,16 +1,11 @@
 import SwiftUI
 import SwiftData
-import PhotosUI
 
 struct ExamsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Exam.date) private var exams: [Exam]
     @Query(sort: \Subject.name) private var subjects: [Subject]
     @State private var showingAddSheet = false
-    @State private var showingScanSheet = false
-    @State private var selectedPhotoItem: PhotosPickerItem?
-    @State private var isProcessingImage = false
-    @State private var scannedExams: [ScannedExam] = []
 
     var body: some View {
         NavigationStack {
@@ -70,16 +65,6 @@ struct ExamsView: View {
             .listStyle(.insetGrouped)
             .navigationTitle("Evaluaciones")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    PhotosPicker(
-                        selection: $selectedPhotoItem,
-                        matching: .images,
-                        photoLibrary: .shared()
-                    ) {
-                        Image(systemName: "doc.text.viewfinder")
-                            .foregroundStyle(.indigo)
-                    }
-                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: { showingAddSheet = true }) {
                         Image(systemName: "plus")
@@ -89,54 +74,6 @@ struct ExamsView: View {
             }
             .sheet(isPresented: $showingAddSheet) {
                 AddExamView()
-            }
-            .sheet(isPresented: $showingScanSheet) {
-                ScanReviewView(scannedExams: scannedExams)
-            }
-            .overlay {
-                if isProcessingImage {
-                    ZStack {
-                        Color.black.opacity(0.3)
-                            .ignoresSafeArea()
-                        VStack(spacing: 16) {
-                            ProgressView()
-                                .scaleEffect(1.2)
-                            Text("Analizando imagen...")
-                                .font(.subheadline)
-                                .foregroundStyle(.white)
-                        }
-                        .padding(24)
-                        .background(.ultraThinMaterial)
-                        .clipShape(.rect(cornerRadius: 16))
-                    }
-                }
-            }
-            .task(id: selectedPhotoItem) {
-                guard let item = selectedPhotoItem else { return }
-                await processSelectedPhoto(item)
-            }
-        }
-    }
-
-    private func processSelectedPhoto(_ item: PhotosPickerItem) async {
-        isProcessingImage = true
-        defer { isProcessingImage = false }
-
-        do {
-            if let data = try await item.loadTransferable(type: Data.self),
-               let image = UIImage(data: data) {
-                let text = try await OCRService.shared.recognizeText(from: image)
-                let parsed = ExamParser.parseExams(from: text)
-                await MainActor.run {
-                    scannedExams = parsed
-                    showingScanSheet = true
-                    selectedPhotoItem = nil
-                }
-            }
-        } catch {
-            print("OCR error: \(error)")
-            await MainActor.run {
-                selectedPhotoItem = nil
             }
         }
     }

@@ -139,5 +139,5 @@ struct MoreList: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [Subject.self, Exam.self, StudySession.self, StudyTask.self, ClassSession.self, FocusLog.self, Source.self, NotebookPage.self, Flashcard.self], inMemory: true)
+        .modelContainer(for: [Subject.self, Exam.self, StudySession.self, StudyTask.self, ClassSession.self, FocusLog.self], inMemory: true)
 }

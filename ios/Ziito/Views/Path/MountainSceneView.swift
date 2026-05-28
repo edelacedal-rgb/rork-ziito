@@ -24,6 +24,14 @@ struct MountainGear: Identifiable, Equatable {
     enum GearKind { case boots, axe, rope, tent, fire }
 }
 
+/// A Duolingo-style milestone node sitting on a subject's trail.
+struct MountainTrailNode: Identifiable, Equatable {
+    let id: UUID
+    let subjectIndex: Int
+    let altitude: Double    // 0..1 along the slope
+    let completed: Bool
+}
+
 enum DayPhase {
     case night, dawn, day, goldenHour, dusk
 
@@ -49,6 +57,10 @@ struct MountainSceneView: UIViewRepresentable {
     let monuments: [MountainMonument]
     let gear: [MountainGear]
     let dayPhase: DayPhase
+    /// Duolingo-style milestone nodes laid along each subject's trail.
+    let trail: [MountainTrailNode]
+    /// 0..1 global unlock progress; the candy-crush fog recedes upward as this grows.
+    let fogReveal: Double
     /// 0..1 where 0 = base camp, 1 = zenit. Controls camera vertical position.
     let altitude: Double
     /// In radians: free rotation around the mountain (no snap).
@@ -70,6 +82,8 @@ struct MountainSceneView: UIViewRepresentable {
             flags: flags,
             monuments: monuments,
             gear: gear,
+            trail: trail,
+            fogReveal: fogReveal,
             dayPhase: dayPhase,
             fogMode: fogMode
         )
@@ -83,6 +97,8 @@ struct MountainSceneView: UIViewRepresentable {
         c.refreshFlags(flags)
         c.refreshMonuments(monuments)
         c.refreshGear(gear)
+        c.refreshTrail(trail)
+        c.refreshProgressFog(reveal: fogReveal, animated: true)
         c.refreshLighting(dayPhase: dayPhase, fogMode: fogMode)
         c.updateCamera(altitude: altitude, rotation: rotation, animated: true)
     }
@@ -102,7 +118,11 @@ final class MountainSceneCoordinator: NSObject {
     private let flagsRoot = SCNNode()
     private let monumentsRoot = SCNNode()
     private let labelsRoot = SCNNode()
+    private let trailRoot = SCNNode()
+    private let progressFog = SCNNode()
     private let gearRoot = SCNNode()
+    private var currentTrailSignature: String = ""
+    private var currentFogReveal: Double = -1
     private let sun = SCNNode()
     private let ambient = SCNNode()
     private let campfire = SCNNode()
@@ -128,6 +148,8 @@ final class MountainSceneCoordinator: NSObject {
         mountainPivot.addChildNode(flagsRoot)
         mountainPivot.addChildNode(monumentsRoot)
         mountainPivot.addChildNode(labelsRoot)
+        mountainPivot.addChildNode(trailRoot)
+        mountainPivot.addChildNode(progressFog)
         pivot.addChildNode(gearRoot)
 
         // Camera
@@ -195,13 +217,15 @@ final class MountainSceneCoordinator: NSObject {
 
     // MARK: - Rebuild
 
-    func rebuild(subjectColors: [UIColor], subjectNames: [String], flags: [MountainFlag], monuments: [MountainMonument], gear: [MountainGear], dayPhase: DayPhase, fogMode: Bool) {
+    func rebuild(subjectColors: [UIColor], subjectNames: [String], flags: [MountainFlag], monuments: [MountainMonument], gear: [MountainGear], trail: [MountainTrailNode], fogReveal: Double, dayPhase: DayPhase, fogMode: Bool) {
         let colors = subjectColors.isEmpty ? [UIColor.systemIndigo, .systemTeal, .systemOrange, .systemPink] : subjectColors
         let names = subjectNames.isEmpty ? Array(repeating: "", count: colors.count) : subjectNames
         rebuildMountainGeometry(colors: colors, names: names)
         refreshFlags(flags)
         refreshMonuments(monuments)
         refreshGear(gear)
+        refreshTrail(trail)
+        refreshProgressFog(reveal: fogReveal, animated: false)
         refreshLighting(dayPhase: dayPhase, fogMode: fogMode)
     }
 
@@ -400,10 +424,13 @@ final class MountainSceneCoordinator: NSObject {
             elements.append(elem)
 
             let mat = SCNMaterial()
-            let baseColor = colors[face % colors.count]
+            // Premium matte natural look: subtle subject identity blended toward a mossy
+            // green/earth so faces stay distinguishable without garish color.
+            let moss = UIColor(red: 0.34, green: 0.46, blue: 0.30, alpha: 1)
+            let baseColor = colors[face % colors.count].mixed(with: moss, t: 0.52)
             mat.diffuse.contents = baseColor
             mat.lightingModel = .physicallyBased
-            mat.roughness.contents = 0.85
+            mat.roughness.contents = 0.95
             mat.metalness.contents = 0.0
             mat.isDoubleSided = true
             materials.append(mat)
@@ -424,6 +451,122 @@ final class MountainSceneCoordinator: NSObject {
             currentNames = subjectNames
             rebuildFaceLabels(names: subjectNames)
         }
+    }
+
+    // MARK: - Trail (Duolingo milestone nodes)
+
+    /// Rebuilds the curved milestone trail with flat, polished circular nodes per face.
+    /// Earth-tone, no glow/neon, integrated naturally into the slope.
+    func refreshTrail(_ nodes: [MountainTrailNode]) {
+        let signature = nodes.map { "\($0.subjectIndex):\(String(format: "%.2f", $0.altitude)):\($0.completed ? 1 : 0)" }.joined(separator: ",")
+        guard signature != currentTrailSignature else { return }
+        currentTrailSignature = signature
+        trailRoot.childNodes.forEach { $0.removeFromParentNode() }
+
+        // Group by face so we can draw connectors between consecutive nodes.
+        let byFace = Dictionary(grouping: nodes, by: { $0.subjectIndex })
+        for (face, faceNodes) in byFace {
+            let sorted = faceNodes.sorted { $0.altitude < $1.altitude }
+            var previous: SCNVector3? = nil
+            for n in sorted {
+                // Gentle zig-zag so the path curves naturally up the slope.
+                let wobble = Float(sin(n.altitude * 9.0)) * 0.16
+                let pos = surfacePoint(angleIndex: face, altitude: n.altitude, angleOffset: wobble)
+                if let prev = previous {
+                    trailRoot.addChildNode(buildTrailConnector(from: prev, to: pos.position))
+                }
+                trailRoot.addChildNode(buildTrailNode(n, at: pos))
+                previous = pos.position
+            }
+        }
+    }
+
+    private func buildTrailNode(_ node: MountainTrailNode, at pos: SurfacePoint) -> SCNNode {
+        let disc = SCNCylinder(radius: 0.2, height: 0.05)
+        disc.radialSegmentCount = 24
+        let mat = SCNMaterial()
+        let earthDone = currentColors.isEmpty
+            ? UIColor(red: 0.78, green: 0.62, blue: 0.40, alpha: 1)
+            : currentColors[node.subjectIndex % currentColors.count].mixed(with: UIColor(red: 0.55, green: 0.43, blue: 0.28, alpha: 1), t: 0.45)
+        mat.diffuse.contents = node.completed ? earthDone : UIColor(white: 0.62, alpha: 1)
+        mat.lightingModel = .physicallyBased
+        mat.roughness.contents = 0.7
+        mat.metalness.contents = 0.0
+        disc.materials = [mat]
+        let discNode = SCNNode(geometry: disc)
+        // Lay the disc flat against the slope, facing outward.
+        discNode.eulerAngles = SCNVector3(Float.pi / 2, 0, 0)
+
+        let root = SCNNode()
+        root.position = pos.position
+        root.eulerAngles.y = pos.outwardYaw
+        root.addChildNode(discNode)
+
+        // A subtle raised rim ring for a polished, integrated finish.
+        let ring = SCNTorus(ringRadius: 0.2, pipeRadius: 0.025)
+        let rm = SCNMaterial()
+        rm.diffuse.contents = UIColor(white: node.completed ? 0.95 : 0.5, alpha: 1)
+        rm.lightingModel = .physicallyBased
+        rm.roughness.contents = 0.6
+        ring.materials = [rm]
+        let ringNode = SCNNode(geometry: ring)
+        ringNode.eulerAngles = SCNVector3(Float.pi / 2, 0, 0)
+        ringNode.position.z = 0.03
+        root.addChildNode(ringNode)
+        return root
+    }
+
+    private func buildTrailConnector(from a: SCNVector3, to b: SCNVector3) -> SCNNode {
+        let dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z
+        let dist = sqrt(dx * dx + dy * dy + dz * dz)
+        let path = SCNCylinder(radius: 0.05, height: CGFloat(max(0.001, dist)))
+        let m = SCNMaterial()
+        m.diffuse.contents = UIColor(red: 0.62, green: 0.50, blue: 0.34, alpha: 0.92)
+        m.lightingModel = .physicallyBased
+        m.roughness.contents = 0.85
+        path.materials = [m]
+        let n = SCNNode(geometry: path)
+        n.position = SCNVector3((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2)
+        // Orient the cylinder (default +Y) along the segment direction.
+        n.look(at: b, up: SCNVector3(0, 1, 0), localFront: SCNVector3(0, 1, 0))
+        return n
+    }
+
+    // MARK: - Candy-Crush progress fog
+
+    /// White soft fog covering the upper portion of the mountain; recedes upward as
+    /// `reveal` (0..1) grows. At reveal 0 it covers roughly the upper third.
+    func refreshProgressFog(reveal: Double, animated: Bool) {
+        let r = max(0, min(1, reveal))
+        guard r != currentFogReveal else { return }
+        currentFogReveal = r
+        progressFog.childNodes.forEach { $0.removeFromParentNode() }
+
+        // Bottom of the fog band climbs from ~0.62 (upper third) up to the summit.
+        let fogBottomT = Float(0.62 + 0.38 * r)
+        guard fogBottomT < 0.985 else { return } // fully revealed
+
+        let bottomY = heightAt(fogBottomT)
+        let height = (summit + 1.4) - bottomY
+        let bottomRadius = CGFloat(radiusAt(fogBottomT) * 1.25 + 0.5)
+        let cone = SCNCone(topRadius: 0.04, bottomRadius: bottomRadius, height: CGFloat(max(0.2, height)))
+        cone.radialSegmentCount = 40
+        let mat = SCNMaterial()
+        mat.diffuse.contents = UIColor(white: 0.97, alpha: 0.5)
+        mat.lightingModel = .constant
+        mat.isDoubleSided = true
+        mat.writesToDepthBuffer = false
+        mat.blendMode = .alpha
+        cone.materials = [mat]
+        let coneNode = SCNNode(geometry: cone)
+        coneNode.position.y = bottomY + Float(max(0.2, height)) / 2
+        coneNode.opacity = 0
+        progressFog.addChildNode(coneNode)
+
+        SCNTransaction.begin()
+        SCNTransaction.animationDuration = animated ? 0.9 : 0
+        coneNode.opacity = 1
+        SCNTransaction.commit()
     }
 
     // MARK: - Flags / Monuments / Gear
@@ -738,9 +881,9 @@ final class MountainSceneCoordinator: NSObject {
     }
 
     /// Returns a position on the lateral surface for a given subject index + normalized altitude (0..1).
-    private func surfacePoint(angleIndex: Int, altitude: Double) -> SurfacePoint {
+    private func surfacePoint(angleIndex: Int, altitude: Double, angleOffset: Float = 0) -> SurfacePoint {
         let segs = max(1, faceCount)
-        let centerAngle = (Float(angleIndex) + 0.5) / Float(segs) * Float.pi * 2
+        let centerAngle = (Float(angleIndex) + 0.5) / Float(segs) * Float.pi * 2 + angleOffset
         let a = max(0, min(1, Float(altitude)))
         // Match the smooth mountain profile so flags/monuments hug the real surface.
         let radius = radiusAt(a)

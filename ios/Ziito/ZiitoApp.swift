@@ -11,9 +11,6 @@ struct ZiitoApp: App {
             StudyTask.self,
             ClassSession.self,
             FocusLog.self,
-            Source.self,
-            NotebookPage.self,
-            Flashcard.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

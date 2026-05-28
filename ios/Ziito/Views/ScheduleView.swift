@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import PhotosUI
 
 /// Google-Calendar-style weekly timeline.
 /// Horizontal page = day, vertical scroll = hours of the day.
@@ -13,11 +12,6 @@ struct ScheduleView: View {
 
     @State private var selectedDay: Weekday = ScheduleView.todayWeekday()
     @State private var showingAdd = false
-    @State private var selectedPhotoItem: PhotosPickerItem?
-    @State private var isProcessingImage = false
-    @State private var scannedClasses: [ScannedClass] = []
-    @State private var showingScanSheet = false
-    @State private var scanError: String?
     @State private var editing: ClassSession?
 
     // Layout constants
@@ -47,12 +41,6 @@ struct ScheduleView: View {
         .navigationTitle("Horario")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                PhotosPicker(selection: $selectedPhotoItem, matching: .images, photoLibrary: .shared()) {
-                    Image(systemName: "doc.text.viewfinder")
-                        .foregroundStyle(.indigo)
-                }
-            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showingAdd = true } label: {
                     Image(systemName: "plus.circle.fill")
@@ -66,37 +54,6 @@ struct ScheduleView: View {
         }
         .sheet(item: $editing) { c in
             AddClassView(editing: c)
-        }
-        .sheet(isPresented: $showingScanSheet) {
-            ScanScheduleReviewView(scannedClasses: scannedClasses)
-        }
-        .alert("No pudimos leer el horario", isPresented: Binding(
-            get: { scanError != nil },
-            set: { if !$0 { scanError = nil } }
-        )) {
-            Button("OK", role: .cancel) { scanError = nil }
-        } message: {
-            Text(scanError ?? "")
-        }
-        .overlay {
-            if isProcessingImage {
-                ZStack {
-                    Color.black.opacity(0.3).ignoresSafeArea()
-                    VStack(spacing: 14) {
-                        ProgressView().scaleEffect(1.2)
-                        Text("Analizando horario…")
-                            .font(.subheadline)
-                            .foregroundStyle(.white)
-                    }
-                    .padding(24)
-                    .background(.ultraThinMaterial)
-                    .clipShape(.rect(cornerRadius: 16))
-                }
-            }
-        }
-        .task(id: selectedPhotoItem) {
-            guard let item = selectedPhotoItem else { return }
-            await processSelectedPhoto(item)
         }
     }
 
@@ -313,38 +270,6 @@ struct ScheduleView: View {
     private func yOffset(forMinute m: Int) -> CGFloat {
         let minutesFromStart = CGFloat(m - startHour * 60)
         return max(0, (minutesFromStart / 60) * hourHeight)
-    }
-
-    // MARK: - Scan
-
-    private func processSelectedPhoto(_ item: PhotosPickerItem) async {
-        isProcessingImage = true
-        defer { isProcessingImage = false }
-        do {
-            guard let data = try await item.loadTransferable(type: Data.self),
-                  let image = UIImage(data: data) else {
-                selectedPhotoItem = nil
-                return
-            }
-            let text = try await OCRService.shared.recognizeText(from: image)
-            var parsed: [ScannedClass] = []
-            if let json = try? await AIService.shared.parseSchedule(text: text) {
-                parsed = ScheduleParser.parseAIJSON(json)
-            }
-            if parsed.isEmpty {
-                parsed = ScheduleParser.parseClasses(from: text)
-            }
-            scannedClasses = parsed
-            selectedPhotoItem = nil
-            if parsed.isEmpty {
-                scanError = "No se detectaron clases en la imagen. Intenta con una foto más nítida o un documento claro."
-            } else {
-                showingScanSheet = true
-            }
-        } catch {
-            selectedPhotoItem = nil
-            scanError = "No pudimos procesar la imagen. Intenta de nuevo."
-        }
     }
 
     private static func todayWeekday() -> Weekday {

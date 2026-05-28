@@ -43,8 +43,6 @@ struct TodayView: View {
                 VStack(spacing: 20) {
                     GamificationBar()
 
-                    SocraticTutorHero()
-
                     headerCard
 
                     studyMomentBanner
