@@ -857,31 +857,13 @@ final class MountainSceneCoordinator: NSObject {
     /// Rebuilds the curved milestone trail with flat, polished circular nodes per face.
     /// Earth-tone, no glow/neon, integrated naturally into the slope.
     func refreshTrail(_ nodes: [MountainTrailNode]) {
-        let signature = nodes.map { "\($0.subjectIndex):\(String(format: "%.2f", $0.altitude)):\($0.completed ? 1 : 0)" }.joined(separator: ",")
+        // Duolingo-style milestone nodes on the mountain were removed per design.
+        // Keep the painted static route only; clear any previously built nodes.
+        _ = nodes
+        let signature = "none"
         guard signature != currentTrailSignature else { return }
         currentTrailSignature = signature
         trailRoot.childNodes.forEach { $0.removeFromParentNode() }
-
-        // Group by face so we can draw connectors between consecutive nodes.
-        let byFace = Dictionary(grouping: nodes, by: { $0.subjectIndex })
-        for (face, faceNodes) in byFace {
-            let sorted = faceNodes.sorted { $0.altitude < $1.altitude }
-            // The first not-yet-completed node is the "next" one to tackle — it bounces.
-            let nextIdx = sorted.firstIndex { !$0.completed }
-            var previous: SCNVector3? = nil
-            for (i, n) in sorted.enumerated() {
-                // Sit each node exactly on the painted route: match the static trail's
-                // switchback formula so the Duolingo buttons line up on the drawn line.
-                let f = Float((n.altitude - 0.04) / 0.9)
-                let wobble = sin(f * 7.0) * 0.18 * (1 - f * 0.35)
-                let pos = surfacePoint(angleIndex: face, altitude: n.altitude, angleOffset: wobble)
-                if let prev = previous {
-                    trailRoot.addChildNode(buildTrailConnector(from: prev, to: pos.position))
-                }
-                trailRoot.addChildNode(buildTrailNode(n, at: pos, isNext: i == nextIdx))
-                previous = pos.position
-            }
-        }
     }
 
     /// A Duolingo-style milestone button: a chunky raised circular cap sitting on a
