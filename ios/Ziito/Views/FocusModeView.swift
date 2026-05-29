@@ -80,11 +80,10 @@ struct FocusModeView: View {
             if !pomodoro.isRunning {
                 pomodoro.start(mode: .pomodoro)
             }
-            FlagFXService.shared.startWind(intensity: 0.35)
             startAnimations()
             // Wire the automatic reward: only fires when the focus timer reaches 00:00.
             pomodoro.onFocusCompleted = { _ in
-                FlagFXService.shared.playFlagPlant(mastery: false)
+                Haptics.notify(.success)
                 // Duolingo-style reward: XP, streak advance and a refilled heart.
                 GamificationService.shared.registerStudyCompletion(cycles: 1)
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.65)) { flashReward = true }
@@ -94,7 +93,6 @@ struct FocusModeView: View {
             }
         }
         .onDisappear {
-            FlagFXService.shared.stopWind()
             pomodoro.onFocusCompleted = nil
         }
         .onChange(of: scenePhase) { _, newPhase in
@@ -106,7 +104,6 @@ struct FocusModeView: View {
         .confirmationDialog("¿Abandonar la pared?", isPresented: $showingStop, titleVisibility: .visible) {
             Button("Sí, descender", role: .destructive) {
                 pomodoro.stop(modelContext: modelContext)
-                FlagFXService.shared.stopWind()
                 dismiss()
             }
             Button("Seguir escalando", role: .cancel) {}
@@ -341,11 +338,10 @@ struct FocusModeView: View {
                     blizzard = false
                     frostOpacity = 0
                 }
-                FlagFXService.shared.startWind(intensity: 0.35)
             }
         case .inactive, .background:
             if pomodoro.isRunning && !pomodoro.isPaused {
-                FlagFXService.shared.transitionToBlizzard()
+                Haptics.notify(.warning)
                 withAnimation(.easeIn(duration: 0.6)) {
                     blizzard = true
                     frostOpacity = 1
