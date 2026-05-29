@@ -24,14 +24,6 @@ struct MountainGear: Identifiable, Equatable {
     enum GearKind { case boots, axe, rope, tent, fire }
 }
 
-/// A Duolingo-style milestone node sitting on a subject's trail.
-struct MountainTrailNode: Identifiable, Equatable {
-    let id: UUID
-    let subjectIndex: Int
-    let altitude: Double    // 0..1 along the slope
-    let completed: Bool
-}
-
 enum DayPhase {
     case night, dawn, day, goldenHour, dusk
 
@@ -57,8 +49,6 @@ struct MountainSceneView: UIViewRepresentable {
     let monuments: [MountainMonument]
     let gear: [MountainGear]
     let dayPhase: DayPhase
-    /// Duolingo-style milestone nodes laid along each subject's trail.
-    let trail: [MountainTrailNode]
     /// 0..1 global unlock progress; the candy-crush fog recedes upward as this grows.
     let fogReveal: Double
     /// 0..1 where 0 = base camp, 1 = zenit. Controls camera vertical position.
@@ -82,7 +72,6 @@ struct MountainSceneView: UIViewRepresentable {
             flags: flags,
             monuments: monuments,
             gear: gear,
-            trail: trail,
             fogReveal: fogReveal,
             dayPhase: dayPhase,
             fogMode: fogMode
@@ -98,7 +87,6 @@ struct MountainSceneView: UIViewRepresentable {
         c.refreshAltar(flags)
         c.refreshMonuments(monuments)
         c.refreshGear(gear)
-        c.refreshTrail(trail)
         c.refreshProgressFog(reveal: fogReveal, animated: true)
         c.refreshLighting(dayPhase: dayPhase, fogMode: fogMode)
         c.updateCamera(altitude: altitude, rotation: rotation, animated: true)
@@ -125,7 +113,6 @@ final class MountainSceneCoordinator: NSObject {
     private let flagsRoot = SCNNode()
     private let monumentsRoot = SCNNode()
     private let labelsRoot = SCNNode()
-    private let trailRoot = SCNNode()
     /// Always-visible winding route painted onto every mountain face.
     private let staticTrailRoot = SCNNode()
     private let progressFog = SCNNode()
@@ -133,7 +120,6 @@ final class MountainSceneCoordinator: NSObject {
     /// Static flag altar anchored to the RIGHT of the diorama; mirrors planted flags.
     private let altarRoot = SCNNode()
     private var currentAltarCount: Int = -1
-    private var currentTrailSignature: String = ""
     private var currentFogReveal: Double = -1
     private let sun = SCNNode()
     private let ambient = SCNNode()
@@ -169,7 +155,6 @@ final class MountainSceneCoordinator: NSObject {
         mountainPivot.addChildNode(flagsRoot)
         mountainPivot.addChildNode(monumentsRoot)
         mountainPivot.addChildNode(labelsRoot)
-        mountainPivot.addChildNode(trailRoot)
         mountainPivot.addChildNode(staticTrailRoot)
         mountainPivot.addChildNode(progressFog)
         groundParent.addChildNode(gearRoot)
@@ -457,7 +442,7 @@ final class MountainSceneCoordinator: NSObject {
 
     // MARK: - Rebuild
 
-    func rebuild(subjectColors: [UIColor], subjectNames: [String], flags: [MountainFlag], monuments: [MountainMonument], gear: [MountainGear], trail: [MountainTrailNode], fogReveal: Double, dayPhase: DayPhase, fogMode: Bool) {
+    func rebuild(subjectColors: [UIColor], subjectNames: [String], flags: [MountainFlag], monuments: [MountainMonument], gear: [MountainGear], fogReveal: Double, dayPhase: DayPhase, fogMode: Bool) {
         let colors = subjectColors.isEmpty ? [UIColor.systemIndigo, .systemTeal, .systemOrange, .systemPink] : subjectColors
         let names = subjectNames.isEmpty ? Array(repeating: "", count: colors.count) : subjectNames
         rebuildMountainGeometry(colors: colors, names: names)
@@ -465,7 +450,6 @@ final class MountainSceneCoordinator: NSObject {
         refreshAltar(flags)
         refreshMonuments(monuments)
         refreshGear(gear)
-        refreshTrail(trail)
         refreshProgressFog(reveal: fogReveal, animated: false)
         refreshLighting(dayPhase: dayPhase, fogMode: fogMode)
     }
@@ -477,7 +461,7 @@ final class MountainSceneCoordinator: NSObject {
         faceCount = max(3, colors.count)
 
         // Remove old mountain nodes (children of mountainPivot except special roots)
-        for child in mountainPivot.childNodes where child !== flagsRoot && child !== monumentsRoot && child !== labelsRoot && child !== trailRoot && child !== progressFog && child !== staticTrailRoot && child !== groundParent {
+        for child in mountainPivot.childNodes where child !== flagsRoot && child !== monumentsRoot && child !== labelsRoot && child !== progressFog && child !== staticTrailRoot && child !== groundParent {
             child.removeFromParentNode()
         }
         faceMaterials = []
@@ -853,144 +837,6 @@ final class MountainSceneCoordinator: NSObject {
     }
 
     // MARK: - Trail (Duolingo milestone nodes)
-
-    /// Rebuilds the curved milestone trail with flat, polished circular nodes per face.
-    /// Earth-tone, no glow/neon, integrated naturally into the slope.
-    func refreshTrail(_ nodes: [MountainTrailNode]) {
-        // Duolingo-style milestone nodes on the mountain were removed per design.
-        // Keep the painted static route only; clear any previously built nodes.
-        _ = nodes
-        let signature = "none"
-        guard signature != currentTrailSignature else { return }
-        currentTrailSignature = signature
-        trailRoot.childNodes.forEach { $0.removeFromParentNode() }
-    }
-
-    /// A Duolingo-style milestone button: a chunky raised circular cap sitting on a
-    /// darker base (the 3D "pressed coin" depth), with a star on completed nodes. The
-    /// next node to tackle bounces gently to draw the eye.
-    private func buildTrailNode(_ node: MountainTrailNode, at pos: SurfacePoint, isNext: Bool) -> SCNNode {
-        let root = SCNNode()
-        root.position = pos.position
-        root.eulerAngles.y = pos.outwardYaw
-
-        // The whole button faces outward from the slope (cap toward the camera).
-        let button = SCNNode()
-        button.eulerAngles = SCNVector3(Float.pi / 2, 0, 0)
-        root.addChildNode(button)
-
-        let subjectColor = currentColors.isEmpty
-            ? UIColor(red: 0.35, green: 0.78, blue: 0.30, alpha: 1)
-            : currentColors[node.subjectIndex % currentColors.count]
-        let topColor = node.completed ? subjectColor : UIColor(white: 0.66, alpha: 1)
-        let baseColor = node.completed
-            ? subjectColor.mixed(with: .black, t: 0.42)
-            : UIColor(white: 0.42, alpha: 1)
-
-        // Darker base disc — the depth/shadow that makes the node read as a 3D button.
-        let base = SCNCylinder(radius: 0.27, height: 0.14)
-        base.radialSegmentCount = 28
-        let baseMat = SCNMaterial()
-        baseMat.diffuse.contents = baseColor
-        baseMat.lightingModel = .physicallyBased
-        baseMat.roughness.contents = 0.85
-        baseMat.metalness.contents = 0.0
-        base.materials = [baseMat]
-        let baseNode = SCNNode(geometry: base)
-        baseNode.position.y = -0.04
-        button.addChildNode(baseNode)
-
-        // Bright top cap raised toward the camera.
-        let cap = SCNCylinder(radius: 0.25, height: 0.13)
-        cap.radialSegmentCount = 28
-        let capMat = SCNMaterial()
-        capMat.diffuse.contents = topColor
-        capMat.lightingModel = .physicallyBased
-        capMat.roughness.contents = 0.55
-        capMat.metalness.contents = 0.0
-        cap.materials = [capMat]
-        let capNode = SCNNode(geometry: cap)
-        capNode.position.y = 0.075
-        button.addChildNode(capNode)
-
-        // A glossy inner ring on the cap face for the candy-button finish.
-        let ring = SCNTorus(ringRadius: 0.175, pipeRadius: 0.022)
-        let rm = SCNMaterial()
-        rm.diffuse.contents = node.completed ? UIColor(white: 1.0, alpha: 0.9) : UIColor(white: 0.85, alpha: 0.9)
-        rm.lightingModel = .physicallyBased
-        rm.roughness.contents = 0.4
-        ring.materials = [rm]
-        let ringNode = SCNNode(geometry: ring)
-        ringNode.position.y = 0.14
-        button.addChildNode(ringNode)
-
-        // Icon on the cap face: a star for completed, a dot for upcoming.
-        let glyph = node.completed ? "★" : "●"
-        let icon = SCNText(string: glyph, extrusionDepth: 0.02)
-        icon.font = UIFont.systemFont(ofSize: 0.3, weight: .black)
-        icon.flatness = 0.04
-        let im = SCNMaterial()
-        im.diffuse.contents = node.completed ? UIColor.white : UIColor(white: 0.5, alpha: 1)
-        im.emission.contents = node.completed ? UIColor(white: 0.4, alpha: 1) : UIColor.clear
-        im.lightingModel = .constant
-        icon.materials = [im]
-        let iconNode = SCNNode(geometry: icon)
-        let (mn, mx) = icon.boundingBox
-        iconNode.position = SCNVector3(-(mx.x - mn.x) / 2, -(mx.y - mn.y) / 2, 0)
-        let iconPivot = SCNNode()
-        iconPivot.eulerAngles.x = -Float.pi / 2   // lay flat on the cap, glyph facing up/out
-        iconPivot.position.y = 0.155
-        iconPivot.addChildNode(iconNode)
-        button.addChildNode(iconPivot)
-
-        // The next node to conquer bounces gently to invite a tap.
-        if isNext {
-            let bounce = CABasicAnimation(keyPath: "position.y")
-            bounce.fromValue = pos.position.y
-            bounce.toValue = pos.position.y + 0.16
-            bounce.duration = 0.6
-            bounce.autoreverses = true
-            bounce.repeatCount = .infinity
-            bounce.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            root.addAnimation(bounce, forKey: "bounce")
-
-            // A soft glowing halo ring around the active node.
-            let halo = SCNTorus(ringRadius: 0.33, pipeRadius: 0.03)
-            let hm = SCNMaterial()
-            hm.diffuse.contents = subjectColor
-            hm.emission.contents = subjectColor
-            hm.lightingModel = .constant
-            halo.materials = [hm]
-            let haloNode = SCNNode(geometry: halo)
-            haloNode.eulerAngles = SCNVector3(Float.pi / 2, 0, 0)
-            haloNode.position.y = 0.05
-            let pulse = CABasicAnimation(keyPath: "opacity")
-            pulse.fromValue = 0.35
-            pulse.toValue = 0.9
-            pulse.duration = 0.8
-            pulse.autoreverses = true
-            pulse.repeatCount = .infinity
-            haloNode.addAnimation(pulse, forKey: "haloPulse")
-            button.addChildNode(haloNode)
-        }
-        return root
-    }
-
-    private func buildTrailConnector(from a: SCNVector3, to b: SCNVector3) -> SCNNode {
-        let dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z
-        let dist = sqrt(dx * dx + dy * dy + dz * dz)
-        let path = SCNCylinder(radius: 0.05, height: CGFloat(max(0.001, dist)))
-        let m = SCNMaterial()
-        m.diffuse.contents = UIColor(red: 0.62, green: 0.50, blue: 0.34, alpha: 0.92)
-        m.lightingModel = .physicallyBased
-        m.roughness.contents = 0.85
-        path.materials = [m]
-        let n = SCNNode(geometry: path)
-        n.position = SCNVector3((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2)
-        // Orient the cylinder (default +Y) along the segment direction.
-        n.look(at: b, up: SCNVector3(0, 1, 0), localFront: SCNVector3(0, 1, 0))
-        return n
-    }
 
     // MARK: - Candy-Crush progress fog
 

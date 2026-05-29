@@ -173,28 +173,6 @@ struct PathView: View {
         return result
     }
 
-    /// Per-subject Duolingo trail: a fixed run of milestone nodes whose completed
-    /// count is driven by finished tasks + focus sessions for that subject.
-    private var trailNodes: [MountainTrailNode] {
-        var result: [MountainTrailNode] = []
-        let nodesPerFace = 6
-        for (sIdx, subject) in subjects.prefix(faceCount).enumerated() {
-            let completedTasks = allTasks.filter { $0.isCompleted && $0.subjectID == subject.id }.count
-            let completedLogs = logs.filter { $0.subjectID == subject.id && $0.completedCycles > 0 }.count
-            let done = min(nodesPerFace, completedTasks + completedLogs)
-            for i in 0..<nodesPerFace {
-                let alt = 0.08 + (Double(i) / Double(nodesPerFace - 1)) * 0.5
-                result.append(MountainTrailNode(
-                    id: UUID(uuidString: "00000000-0000-0000-\(String(format: "%04d", sIdx))-\(String(format: "%012d", i))") ?? UUID(),
-                    subjectIndex: sIdx,
-                    altitude: alt,
-                    completed: i < done
-                ))
-            }
-        }
-        return result
-    }
-
     /// Global unlock progress (0..1) that drives the candy-crush fog reveal.
     private var fogReveal: Double {
         let active = Array(subjects.prefix(faceCount))
@@ -262,7 +240,6 @@ struct PathView: View {
                 monuments: monuments,
                 gear: gear,
                 dayPhase: dayPhase,
-                trail: trailNodes,
                 fogReveal: fogReveal,
                 altitude: altitude,
                 rotation: rotation,
