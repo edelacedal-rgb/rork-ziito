@@ -25,10 +25,11 @@
 
 - **Diorama sobre base de madera:** la montaña se asienta en una plataforma circular de madera con borde oscuro, con un faldón de pasto verde abrazando su base y un par de pinos. Cielo azul suave de fondo.
 - **Sombreado suave (porcelana mate):** la malla usa normales por vértice promediadas, eliminando las facetas planas; roca gris que transiciona a nieve blanca hacia la cima, con vetas suaves.
-- **Solo gira la montaña:** al deslizar de lado, únicamente la montaña rota sobre su eje Y interno. El pasto, el campamento (izquierda) y el altar de banderas (derecha) quedan estáticos, como si estuvieras parado en el suelo viendo girar las laderas.
-- **Snapping entre materias:** al soltar el swipe, la montaña interpola suavemente y encara exactamente una cara/materia frente a la cámara.
-- **Cámara anclada al suelo:** la cámara se posa a la altura de los ojos sobre el pasto, mirando ligeramente hacia arriba, y sube con suavidad conforme asciendes. Nunca atraviesa la roca.
-- **Sendero estilo Duolingo:** un camino curvo y suave con nodos circulares planos, en tonos tierra, sin neón ni brillos artificiales.
+- **Gira todo el diorama:** al deslizar de lado, gira el conjunto completo (pasto, campamento, altar, pinos y montaña) sobre el eje Y. La cámara queda fija en el suelo, así que el mundo gira frente a ti.
+- **Snapping entre materias:** al soltar el swipe, el diorama interpola suavemente y encara exactamente una cara/materia frente a la cámara.
+- **Cámara baja anclada al suelo:** la cámara se posa baja sobre el pasto mirando claramente hacia arriba; la montaña se aleja (mismo tamaño, más al fondo) y el suelo se extiende hacia ti para no flotar.
+- **Suelo extendido:** un gran campo de pasto plano llega hasta el espectador, así estás parado en el terreno y no flotando sobre una plataforma.
+- **Ruta pintada en la montaña:** cada cara muestra un sendero serpenteante siempre visible, en tonos tierra, que sube desde el pie hasta cerca de la cima (sin neón ni brillos). Encima van los nodos de hitos estilo Duolingo.
 - **Niebla de progreso (estilo Candy Crush):** una neblina blanca suave cubre el tercio superior y se disipa hacia arriba a medida que avanzas.
 - **Doble bandera:** al terminar un temporizador se planta una bandera en el nodo de la cara activa y una réplica aparece en el altar estático de la derecha.
 

@@ -118,12 +118,16 @@ final class MountainSceneCoordinator: NSObject {
     /// Static landscape: grass floor, wooden base, trees, camp (left) and flag altar (right).
     /// Never rotates — it buries the mountain's rotation pivot completely.
     private let groundParent = SCNNode()
-    /// The ONLY node that rotates on the Y-axis when the user swipes horizontally.
+    /// The node that rotates on the Y-axis when the user swipes horizontally. The
+    /// whole diorama (ground, camp, altar, trees AND mountain) is parented under it,
+    /// so everything spins together while the camera stays world-static.
     private let mountainPivot = SCNNode()
     private let flagsRoot = SCNNode()
     private let monumentsRoot = SCNNode()
     private let labelsRoot = SCNNode()
     private let trailRoot = SCNNode()
+    /// Always-visible winding route painted onto every mountain face.
+    private let staticTrailRoot = SCNNode()
     private let progressFog = SCNNode()
     private let gearRoot = SCNNode()
     /// Static flag altar anchored to the RIGHT of the diorama; mirrors planted flags.
@@ -155,14 +159,19 @@ final class MountainSceneCoordinator: NSObject {
 
     private func build(scene: SCNScene) {
         scene.rootNode.addChildNode(pivot)
-        // Static landscape and the rotating mountain are SIBLINGS, so only the
-        // mountain spins while the grass/camp/altar stay locked in place.
-        pivot.addChildNode(groundParent)
+        // EVERYTHING (ground, camp, altar, trees and mountain) is parented under the
+        // rotating pivot so the whole diorama spins together. The camera stays on the
+        // static root, so the user feels planted while the world turns in front of them.
         pivot.addChildNode(mountainPivot)
+        // Push the whole diorama back so the mountain sits further away and the ground
+        // extends toward the viewer (you're standing on it, not floating above it).
+        mountainPivot.position = SCNVector3(0, 0, -3)
+        mountainPivot.addChildNode(groundParent)
         mountainPivot.addChildNode(flagsRoot)
         mountainPivot.addChildNode(monumentsRoot)
         mountainPivot.addChildNode(labelsRoot)
         mountainPivot.addChildNode(trailRoot)
+        mountainPivot.addChildNode(staticTrailRoot)
         mountainPivot.addChildNode(progressFog)
         groundParent.addChildNode(gearRoot)
         groundParent.addChildNode(altarRoot)
@@ -173,8 +182,8 @@ final class MountainSceneCoordinator: NSObject {
         cam.zNear = 0.1
         cam.zFar = 200
         cameraNode.camera = cam
-        cameraNode.position = SCNVector3(0, 1.2, 20)
-        cameraNode.look(at: SCNVector3(0, 4.0, 0))
+        cameraNode.position = SCNVector3(0, 0.9, 16)
+        cameraNode.look(at: SCNVector3(0, 5.0, -3))
         pivot.addChildNode(cameraNode)
 
         // Sun (directional)
@@ -212,6 +221,21 @@ final class MountainSceneCoordinator: NSObject {
     // MARK: - Diorama base (static, never rotates)
 
     private func buildDioramaBase(scene: SCNScene) {
+        // A big flat grass field so the ground extends all the way toward the viewer —
+        // you're standing on it, not floating on a small platform. It rotates with the
+        // rest of the diorama but reads the same from every angle (uniform disc).
+        let field = SCNCylinder(radius: 30, height: 0.4)
+        field.radialSegmentCount = 72
+        let fieldMat = SCNMaterial()
+        fieldMat.diffuse.contents = UIColor(red: 0.40, green: 0.60, blue: 0.30, alpha: 1)
+        fieldMat.lightingModel = .physicallyBased
+        fieldMat.roughness.contents = 0.98
+        fieldMat.metalness.contents = 0.0
+        field.materials = [fieldMat]
+        let fieldNode = SCNNode(geometry: field)
+        fieldNode.position.y = -0.21
+        groundParent.addChildNode(fieldNode)
+
         let platformRadius = CGFloat(baseRadius) + 3.6
 
         // Wooden platform (top surface flush with y = 0).
@@ -459,7 +483,7 @@ final class MountainSceneCoordinator: NSObject {
         faceCount = max(3, colors.count)
 
         // Remove old mountain nodes (children of mountainPivot except special roots)
-        for child in mountainPivot.childNodes where child !== flagsRoot && child !== monumentsRoot && child !== labelsRoot {
+        for child in mountainPivot.childNodes where child !== flagsRoot && child !== monumentsRoot && child !== labelsRoot && child !== trailRoot && child !== progressFog && child !== staticTrailRoot && child !== groundParent {
             child.removeFromParentNode()
         }
         faceMaterials = []
@@ -499,8 +523,56 @@ final class MountainSceneCoordinator: NSObject {
         haloNode.position.y = summit + 1.0
         mountainPivot.addChildNode(haloNode)
 
+        // Always-visible winding route painted up every face.
+        buildStaticTrails()
+
         // 3D billboard labels per face (subject names).
         rebuildFaceLabels(names: names)
+    }
+
+    /// Paints a continuous winding route up each mountain face so a clear trail is
+    /// always visible on the slope (independent of milestone data). Earth-toned, matte,
+    /// no glow — it hugs the craggy surface from the foot up to near the summit.
+    private func buildStaticTrails() {
+        staticTrailRoot.childNodes.forEach { $0.removeFromParentNode() }
+        let segs = max(1, faceCount)
+        let steps = 28
+        for face in 0..<segs {
+            var previous: SCNVector3? = nil
+            for i in 0...steps {
+                let f = Float(i) / Float(steps)
+                let alt = 0.04 + f * 0.9
+                // Gentle switchbacks that tighten toward the peak.
+                let wobble = sin(f * 7.0) * 0.18 * (1 - f * 0.35)
+                let sp = surfacePoint(angleIndex: face, altitude: Double(alt), angleOffset: wobble)
+                if let prev = previous {
+                    staticTrailRoot.addChildNode(buildPaintedPathSegment(from: prev, to: sp.position))
+                }
+                previous = sp.position
+            }
+        }
+    }
+
+    /// A short, slightly raised matte ribbon segment of the painted mountain route.
+    private func buildPaintedPathSegment(from a: SCNVector3, to b: SCNVector3) -> SCNNode {
+        let dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z
+        let dist = sqrt(dx * dx + dy * dy + dz * dz)
+        let seg = SCNCylinder(radius: 0.14, height: CGFloat(max(0.001, dist)))
+        seg.radialSegmentCount = 8
+        let m = SCNMaterial()
+        m.diffuse.contents = UIColor(red: 0.80, green: 0.69, blue: 0.49, alpha: 1)
+        m.lightingModel = .physicallyBased
+        m.roughness.contents = 0.95
+        m.metalness.contents = 0.0
+        seg.materials = [m]
+        let n = SCNNode(geometry: seg)
+        // Nudge outward from the mountain centerline so it sits on top of the surface.
+        let mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, mz = (a.z + b.z) / 2
+        let radial = sqrt(mx * mx + mz * mz)
+        let push: Float = radial > 0.001 ? 0.06 / radial : 0
+        n.position = SCNVector3(mx + mx * push, my, mz + mz * push)
+        n.look(at: b, up: SCNVector3(0, 1, 0), localFront: SCNVector3(0, 1, 0))
+        return n
     }
 
     /// Floating low-relief subject sign anchored to each face's base, billboarded to camera.
@@ -1237,20 +1309,20 @@ final class MountainSceneCoordinator: NSObject {
 
     func updateCamera(altitude: Double, rotation: Double, animated: Bool) {
         let altClamped = max(0, min(1, altitude))
-        // Camera is anchored at ground/eye-level on the grass and climbs gently as the
-        // user ascends. It never traverses the rock and stays world-static during rotation.
-        let camY = 1.2 + Float(altClamped) * 5.4
-        let camDistance: Float = 20 - Float(altClamped) * 2
-        let lookY = camY + 2.6 // look slightly upward toward the active ladera
+        // Camera sits low on the ground (you're standing on the grass) and climbs gently
+        // as the user ascends. It stays world-static during rotation and looks upward at
+        // the mountain, which is pushed back at z = -3.
+        let camY = 0.9 + Float(altClamped) * 4.5
+        let camDistance: Float = 16 - Float(altClamped) * 1.5
+        let lookY = camY + 4.0 // look clearly upward toward the active ladera
 
         SCNTransaction.begin()
         SCNTransaction.animationDuration = animated ? 0.18 : 0
-        // ONLY the mountain rotates on its internal Y-axis. The grass floor, base camp
-        // (left) and flag altar (right) stay locked, so the user feels planted on the
-        // ground watching the laderas spin in front of them.
+        // The WHOLE diorama rotates on the Y-axis (ground, camp, altar, trees + mountain).
+        // The snap (handled by the caller) lands one subject face toward the camera.
         mountainPivot.eulerAngles.y = Float(rotation)
         cameraNode.position = SCNVector3(0, camY, camDistance)
-        cameraNode.look(at: SCNVector3(0, lookY, 0))
+        cameraNode.look(at: SCNVector3(0, lookY, -3))
         SCNTransaction.commit()
     }
 
