@@ -137,7 +137,6 @@ final class MountainSceneCoordinator: NSObject {
     private var currentFogReveal: Double = -1
     private let sun = SCNNode()
     private let ambient = SCNNode()
-    private let campfire = SCNNode()
 
     private var faceMaterials: [SCNMaterial] = []
     private var faceCount: Int = 4
@@ -1223,107 +1222,8 @@ final class MountainSceneCoordinator: NSObject {
     }
 
     func refreshGear(_ gear: [MountainGear]) {
-        let existingIds = Set(gearRoot.childNodes.compactMap { $0.name })
-        let newIds = Set(gear.map { $0.id })
-        for child in gearRoot.childNodes where !newIds.contains(child.name ?? "") {
-            child.removeFromParentNode()
-        }
-        for (i, g) in gear.enumerated() where !existingIds.contains(g.id) {
-            let n = buildGearNode(g, slot: i)
-            n.name = g.id
-            gearRoot.addChildNode(n)
-        }
-
-        // Update campfire intensity based on whether fire gear is present
-        let hasFire = gear.contains { $0.kind == .fire }
-        updateCampfire(active: hasFire)
-    }
-
-    private func buildGearNode(_ gear: MountainGear, slot: Int) -> SCNNode {
-        // Base camp lives as an anchor on the LEFT-front of the grass apron, pushed well
-        // clear of the mountain foot so it doesn't crowd the slope.
-        let angle = 2.35 + Float(slot) * 0.32
-        let r: Float = baseRadius + 3.3
-        let pos = SCNVector3(r * cos(angle), 0, r * sin(angle))
-        let node = SCNNode()
-        node.position = pos
-
-        switch gear.kind {
-        case .boots:
-            for dx in [Float(-0.18), 0.18] {
-                let b = SCNBox(width: 0.28, height: 0.18, length: 0.5, chamferRadius: 0.05)
-                let m = SCNMaterial()
-                m.diffuse.contents = UIColor(red: 0.25, green: 0.18, blue: 0.12, alpha: 1)
-                m.lightingModel = .lambert
-                b.materials = [m]
-                let n = SCNNode(geometry: b)
-                n.position = SCNVector3(dx, 0.09, 0)
-                node.addChildNode(n)
-            }
-        case .axe:
-            let shaft = SCNCylinder(radius: 0.025, height: 0.7)
-            let sm = SCNMaterial(); sm.diffuse.contents = UIColor.brown; sm.lightingModel = .lambert
-            shaft.materials = [sm]
-            let sn = SCNNode(geometry: shaft)
-            sn.eulerAngles.z = .pi / 3
-            sn.position.y = 0.25
-            node.addChildNode(sn)
-            let head = SCNBox(width: 0.22, height: 0.06, length: 0.08, chamferRadius: 0.01)
-            let hm = SCNMaterial(); hm.diffuse.contents = UIColor(white: 0.7, alpha: 1); hm.lightingModel = .lambert
-            head.materials = [hm]
-            let hn = SCNNode(geometry: head)
-            hn.position = SCNVector3(0.3, 0.55, 0)
-            node.addChildNode(hn)
-        case .rope:
-            let torus = SCNTorus(ringRadius: 0.22, pipeRadius: 0.05)
-            let m = SCNMaterial(); m.diffuse.contents = UIColor(red: 0.85, green: 0.65, blue: 0.25, alpha: 1); m.lightingModel = .lambert
-            torus.materials = [m]
-            let n = SCNNode(geometry: torus)
-            n.eulerAngles.x = .pi / 2
-            n.position.y = 0.06
-            node.addChildNode(n)
-        case .tent:
-            let tent = SCNPyramid(width: 0.9, height: 0.6, length: 0.9)
-            let m = SCNMaterial(); m.diffuse.contents = UIColor(red: 0.85, green: 0.35, blue: 0.25, alpha: 1); m.lightingModel = .lambert
-            tent.materials = [m]
-            let n = SCNNode(geometry: tent)
-            n.position.y = 0
-            node.addChildNode(n)
-        case .fire:
-            // Logs
-            for ang in stride(from: 0, to: Float.pi, by: .pi / 4) {
-                let log = SCNCylinder(radius: 0.04, height: 0.4)
-                let m = SCNMaterial(); m.diffuse.contents = UIColor(red: 0.35, green: 0.22, blue: 0.12, alpha: 1); m.lightingModel = .lambert
-                log.materials = [m]
-                let n = SCNNode(geometry: log)
-                n.eulerAngles.z = .pi / 2
-                n.eulerAngles.y = ang
-                n.position.y = 0.04
-                node.addChildNode(n)
-            }
-            campfire.position = SCNVector3(pos.x, 0.2, pos.z)
-            if campfire.parent == nil { gearRoot.addChildNode(campfire) }
-            let fireLight = SCNLight()
-            fireLight.type = .omni
-            fireLight.color = UIColor(red: 1.0, green: 0.55, blue: 0.2, alpha: 1)
-            fireLight.intensity = 600
-            fireLight.attenuationStartDistance = 0.2
-            fireLight.attenuationEndDistance = 6
-            campfire.light = fireLight
-            // Flicker
-            let flick = CABasicAnimation(keyPath: "light.intensity")
-            flick.fromValue = 450
-            flick.toValue = 720
-            flick.duration = 0.32
-            flick.autoreverses = true
-            flick.repeatCount = .infinity
-            campfire.addAnimation(flick, forKey: "flicker")
-        }
-        return node
-    }
-
-    private func updateCampfire(active: Bool) {
-        campfire.isHidden = !active
+        // Camp removed — gear and campfire are no longer rendered.
+        gearRoot.childNodes.forEach { $0.removeFromParentNode() }
     }
 
     // MARK: - Lighting

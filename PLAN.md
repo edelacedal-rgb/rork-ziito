@@ -25,20 +25,20 @@
 
 - **Diorama sobre base de madera:** la montaña se asienta en una plataforma circular de madera con borde oscuro, con un faldón de pasto verde abrazando su base y un par de pinos. Cielo azul suave de fondo.
 - **Sombreado suave (porcelana mate):** la malla usa normales por vértice promediadas, eliminando las facetas planas; roca gris que transiciona a nieve blanca hacia la cima, con vetas suaves.
-- **Gira todo el diorama:** al deslizar de lado, gira el conjunto completo (pasto, campamento, altar, pinos y montaña) sobre el eje Y. La cámara queda fija en el suelo, así que el mundo gira frente a ti.
+- **Gira todo el diorama:** al deslizar de lado, gira el conjunto completo (pasto, altar, pinos y montaña) sobre el eje Y. La cámara queda fija en el suelo, así que el mundo gira frente a ti.
 - **Snapping entre materias:** al soltar el swipe, el diorama interpola suavemente y encara exactamente una cara/materia frente a la cámara.
 - **Cámara baja anclada al suelo:** la cámara se posa baja sobre el pasto mirando claramente hacia arriba; la montaña se aleja (mismo tamaño, más al fondo) y el suelo se extiende hacia ti para no flotar.
 - **Suelo extendido:** un gran campo de pasto plano llega hasta el espectador, así estás parado en el terreno y no flotando sobre una plataforma.
 - **Ruta pintada en la montaña (2D):** cada cara muestra un sendero serpenteante siempre visible, dibujado como una línea plana en tonos tierra (sin tubos 3D, sin neón ni brillos), que sube desde el pie hasta cerca de la cima. Encima van los nodos de hitos estilo Duolingo, alineados sobre la línea pintada.
 - **Sendero del suelo en 3D:** el camino que cruza el pasto hacia el pie de la montaña son losas de piedra elevadas con volumen real (a diferencia de la ruta pintada de la montaña, que sigue siendo un dibujo plano).
 - **Cima despejada:** se retiró la niebla blanca de progreso; el pico queda limpio.
-- **Campamento y altar visibles:** el campamento se aleja del pie de la montaña y el altar de banderas se ubica al frente-derecha, dentro del encuadre de la cámara.
+- **Altar visible:** se eliminó el campamento; el altar de banderas se ubica al frente-derecha, dentro del encuadre de la cámara.
 - **Doble bandera:** al terminar un temporizador se planta una bandera en el nodo de la cara activa y una réplica aparece en el altar estático de la derecha.
 
 ### 5. Progreso por enfoque (sin IA)
 
 - Avanzas por los nodos de cada materia **acumulando minutos de enfoque** exitosos asignados a esa materia.
-- Al terminar un temporizador en 00:00 se planta automáticamente una **bandera blanca con la "Z" verde** en el nodo, y una réplica en el **Altar de Banderas** del campamento base.
+- Al terminar un temporizador en 00:00 se planta automáticamente una **bandera blanca con la "Z" verde** en el nodo, y una réplica en el **Altar de Banderas**.
 - Al completar una materia al 100%, emerge un **monumento de piedra** con su nombre.
 
 ### 6. Metas (Zenit y Examen)
