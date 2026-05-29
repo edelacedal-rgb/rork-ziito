@@ -381,8 +381,9 @@ final class MountainSceneCoordinator: NSObject {
 
     /// A low stone plinth on the right edge of the grass where flag replicas are planted.
     private func buildAltarStructure() {
-        let baseX: Float = baseRadius + 1.25
-        altarRoot.position = SCNVector3(baseX, 0.02, 2.4)
+        // Pushed to the front-right of the grass, clear of the mountain and squarely in
+        // the camera's view so the collected flags are always visible.
+        altarRoot.position = SCNVector3(baseRadius - 0.2, 0.02, baseRadius + 2.2)
 
         let plinth = SCNCylinder(radius: 0.62, height: 0.34)
         plinth.radialSegmentCount = 28
@@ -553,25 +554,32 @@ final class MountainSceneCoordinator: NSObject {
         }
     }
 
-    /// A short, slightly raised matte ribbon segment of the painted mountain route.
+    /// A FLAT, drawing-like ribbon segment of the painted mountain route. It's a thin
+    /// 2D plane draped on the slope (faces outward, length along the segment) with a
+    /// constant matte tone — reads as a painted line on the mountain, not a 3D tube.
     private func buildPaintedPathSegment(from a: SCNVector3, to b: SCNVector3) -> SCNNode {
         let dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z
         let dist = sqrt(dx * dx + dy * dy + dz * dz)
-        let seg = SCNCylinder(radius: 0.14, height: CGFloat(max(0.001, dist)))
-        seg.radialSegmentCount = 8
+        let plane = SCNPlane(width: 0.34, height: CGFloat(max(0.001, dist)))
         let m = SCNMaterial()
         m.diffuse.contents = UIColor(red: 0.80, green: 0.69, blue: 0.49, alpha: 1)
-        m.lightingModel = .physicallyBased
-        m.roughness.contents = 0.95
-        m.metalness.contents = 0.0
-        seg.materials = [m]
-        let n = SCNNode(geometry: seg)
-        // Nudge outward from the mountain centerline so it sits on top of the surface.
+        // Constant shading = flat painted look (no 3D lighting on the line).
+        m.lightingModel = .constant
+        m.isDoubleSided = true
+        m.writesToDepthBuffer = false
+        plane.materials = [m]
+        let n = SCNNode(geometry: plane)
+        // Sit the ribbon flat on the surface, nudged slightly outward to avoid z-fighting.
         let mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, mz = (a.z + b.z) / 2
         let radial = sqrt(mx * mx + mz * mz)
-        let push: Float = radial > 0.001 ? 0.06 / radial : 0
+        let push: Float = radial > 0.001 ? 0.05 / radial : 0
         n.position = SCNVector3(mx + mx * push, my, mz + mz * push)
-        n.look(at: b, up: SCNVector3(0, 1, 0), localFront: SCNVector3(0, 1, 0))
+        // Face the plane outward (local +Z radial), length aligned to the segment.
+        n.look(
+            at: SCNVector3(n.position.x + mx, n.position.y, n.position.z + mz),
+            up: SCNVector3(dx, dy, dz),
+            localFront: SCNVector3(0, 0, 1)
+        )
         return n
     }
 
@@ -938,34 +946,8 @@ final class MountainSceneCoordinator: NSObject {
         let r = max(0, min(1, reveal))
         guard r != currentFogReveal else { return }
         currentFogReveal = r
+        // The white summit fog was removed per design — the peak now stays clear.
         progressFog.childNodes.forEach { $0.removeFromParentNode() }
-
-        // Bottom of the fog band climbs from ~0.62 (upper third) up to the summit.
-        let fogBottomT = Float(0.62 + 0.38 * r)
-        guard fogBottomT < 0.985 else { return } // fully revealed
-
-        let bottomY = heightAt(fogBottomT)
-        let height = (summit + 1.4) - bottomY
-        let bottomRadius = CGFloat(radiusAt(fogBottomT) * 1.25 + 0.5)
-        let cone = SCNCone(topRadius: 0.04, bottomRadius: bottomRadius, height: CGFloat(max(0.2, height)))
-        cone.radialSegmentCount = 40
-        let mat = SCNMaterial()
-        mat.diffuse.contents = UIColor(white: 0.97, alpha: 0.5)
-        mat.lightingModel = .constant
-        mat.isDoubleSided = true
-        mat.writesToDepthBuffer = false
-        mat.blendMode = .alpha
-        cone.materials = [mat]
-        let coneNode = SCNNode(geometry: cone)
-        coneNode.scale = SCNVector3(stretchX, 1, stretchZ)
-        coneNode.position.y = bottomY + Float(max(0.2, height)) / 2
-        coneNode.opacity = 0
-        progressFog.addChildNode(coneNode)
-
-        SCNTransaction.begin()
-        SCNTransaction.animationDuration = animated ? 0.9 : 0
-        coneNode.opacity = 1
-        SCNTransaction.commit()
     }
 
     // MARK: - Flags / Monuments / Gear
@@ -1185,9 +1167,10 @@ final class MountainSceneCoordinator: NSObject {
     }
 
     private func buildGearNode(_ gear: MountainGear, slot: Int) -> SCNNode {
-        // Base camp lives as a static anchor on the LEFT-front of the grass apron.
+        // Base camp lives as an anchor on the LEFT-front of the grass apron, pushed well
+        // clear of the mountain foot so it doesn't crowd the slope.
         let angle = 2.35 + Float(slot) * 0.32
-        let r: Float = baseRadius + 1.35
+        let r: Float = baseRadius + 3.3
         let pos = SCNVector3(r * cos(angle), 0, r * sin(angle))
         let node = SCNNode()
         node.position = pos
@@ -1314,7 +1297,9 @@ final class MountainSceneCoordinator: NSObject {
         // the mountain, which is pushed back at z = -3.
         let camY = 0.9 + Float(altClamped) * 4.5
         let camDistance: Float = 16 - Float(altClamped) * 1.5
-        let lookY = camY + 4.0 // look clearly upward toward the active ladera
+        // Look upward toward the active ladera, but not so steeply that the foreground
+        // ground anchors (camp + altar) fall out of frame.
+        let lookY = camY + 2.9
 
         SCNTransaction.begin()
         SCNTransaction.animationDuration = animated ? 0.18 : 0
