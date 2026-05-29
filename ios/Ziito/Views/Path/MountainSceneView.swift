@@ -182,8 +182,8 @@ final class MountainSceneCoordinator: NSObject {
         cam.zNear = 0.1
         cam.zFar = 200
         cameraNode.camera = cam
-        cameraNode.position = SCNVector3(0, 0.8, 9.5)
-        cameraNode.look(at: SCNVector3(0, 3.2, -3))
+        cameraNode.position = SCNVector3(0, 1.1, 12.5)
+        cameraNode.look(at: SCNVector3(0, 3.4, -3))
         pivot.addChildNode(cameraNode)
 
         // Sun (directional)
@@ -316,9 +316,9 @@ final class MountainSceneCoordinator: NSObject {
     }
 
     /// A winding path crossing the grass apron from the front edge straight up to the
-    /// foot of the front-facing slope. Rendered as a FLAT 2D drawing — thin planes laid
-    /// directly on the grass with constant shading (no 3D relief, no glow), like a line
-    /// painted on a map.
+    /// foot of the front-facing slope. Built as REAL 3D stepping stones — raised stone
+    /// slabs with thickness sitting proud of the grass, casting a grounded, dimensional
+    /// trail (not a flat drawing).
     private func buildGroundPath() {
         let pathRoot = SCNNode()
         // The mountain snaps so a face's trail sits at the front (+Z) toward the camera.
@@ -326,65 +326,51 @@ final class MountainSceneCoordinator: NSObject {
         // Curve from the front rim of the grass inward, landing exactly at the foot.
         let startR = baseRadius + 3.0
         let endR = baseRadius + 0.12
-        let steps = 24
+        let stones = 16
 
-        // Build the curve points first, then connect them with flat ribbon quads.
-        var pts: [SCNVector3] = []
-        for i in 0...steps {
-            let f = Float(i) / Float(steps)
+        for i in 0...stones {
+            let f = Float(i) / Float(stones)
             let r = startR * (1 - f) + endR * f
             let lateral = sin(f * Float.pi * 1.6) * 0.9 * (1 - f * f)
             let x = r * cos(baseAngle) + lateral
             let z = r * sin(baseAngle)
-            pts.append(SCNVector3(x, 0.015, z))
+            // Slight per-stone variation in size + tone so it reads natural.
+            let jitter: Float = hashNoise(i * 7, i * 13)
+            let radiusF: Float = 0.30 - f * 0.06 + jitter * 0.05
+            let heightF: Float = 0.12 + jitter * 0.05
+            let radius = CGFloat(radiusF)
+            let height = CGFloat(heightF)
+            let stone = SCNCylinder(radius: radius, height: height)
+            stone.radialSegmentCount = 7
+            let m = SCNMaterial()
+            let tone = 0.58 + jitter * 0.14
+            m.diffuse.contents = UIColor(red: CGFloat(tone), green: CGFloat(tone) * 0.88, blue: CGFloat(tone) * 0.66, alpha: 1)
+            m.lightingModel = .physicallyBased
+            m.roughness.contents = 0.9
+            m.metalness.contents = 0.0
+            stone.materials = [m]
+            let node = SCNNode(geometry: stone)
+            node.position = SCNVector3(x, Float(height) / 2 - 0.02, z)
+            node.eulerAngles.y = jitter * Float.pi
+            pathRoot.addChildNode(node)
         }
 
-        let pathColor = UIColor(red: 0.74, green: 0.62, blue: 0.42, alpha: 1)
-        for i in 0..<(pts.count - 1) {
-            let f = Float(i) / Float(pts.count - 1)
-            let width = CGFloat(0.5 - f * 0.18)
-            pathRoot.addChildNode(buildFlatGroundSegment(from: pts[i], to: pts[i + 1], width: width, color: pathColor))
-        }
-
-        // Trailhead: a flat circular marker (also 2D, lying on the ground) where the
-        // ground path meets the milestone trail climbing the slope.
+        // Trailhead: a raised stone disc where the ground path meets the slope trail.
         let footR = baseRadius + 0.05
         let headX = footR * cos(baseAngle)
         let headZ = footR * sin(baseAngle)
-
-        let disc = SCNPlane(width: 0.6, height: 0.6)
-        disc.cornerRadius = 0.3
+        let disc = SCNCylinder(radius: 0.42, height: 0.16)
+        disc.radialSegmentCount = 24
         let dm = SCNMaterial()
-        dm.diffuse.contents = UIColor(red: 0.70, green: 0.56, blue: 0.36, alpha: 1)
-        dm.lightingModel = .constant
-        dm.isDoubleSided = true
+        dm.diffuse.contents = UIColor(red: 0.66, green: 0.54, blue: 0.38, alpha: 1)
+        dm.lightingModel = .physicallyBased
+        dm.roughness.contents = 0.85
         disc.materials = [dm]
         let discNode = SCNNode(geometry: disc)
-        discNode.eulerAngles.x = -Float.pi / 2
-        discNode.position = SCNVector3(headX, 0.02, headZ)
+        discNode.position = SCNVector3(headX, 0.06, headZ)
         pathRoot.addChildNode(discNode)
 
         groundParent.addChildNode(pathRoot)
-    }
-
-    /// A flat ribbon quad lying on the ground between two points — a 2D painted segment
-    /// with constant shading (no lighting relief), used for the grass path drawing.
-    private func buildFlatGroundSegment(from a: SCNVector3, to b: SCNVector3, width: CGFloat, color: UIColor) -> SCNNode {
-        let dx = b.x - a.x, dz = b.z - a.z
-        let dist = sqrt(dx * dx + dz * dz)
-        let plane = SCNPlane(width: width, height: CGFloat(max(0.001, dist)) + 0.04)
-        plane.cornerRadius = width / 2
-        let m = SCNMaterial()
-        m.diffuse.contents = color
-        m.lightingModel = .constant
-        m.isDoubleSided = true
-        plane.materials = [m]
-        let n = SCNNode(geometry: plane)
-        n.position = SCNVector3((a.x + b.x) / 2, 0.02, (a.z + b.z) / 2)
-        // Lay flat on the ground (XZ plane) and orient its length along the segment.
-        n.eulerAngles.x = -Float.pi / 2
-        n.eulerAngles.z = -atan2(dx, dz)
-        return n
     }
 
     /// A low stone plinth on the right edge of the grass where flag replicas are planted.
@@ -885,8 +871,10 @@ final class MountainSceneCoordinator: NSObject {
             let nextIdx = sorted.firstIndex { !$0.completed }
             var previous: SCNVector3? = nil
             for (i, n) in sorted.enumerated() {
-                // Gentle zig-zag so the path curves naturally up the slope.
-                let wobble = Float(sin(n.altitude * 9.0)) * 0.16
+                // Sit each node exactly on the painted route: match the static trail's
+                // switchback formula so the Duolingo buttons line up on the drawn line.
+                let f = Float((n.altitude - 0.04) / 0.9)
+                let wobble = sin(f * 7.0) * 0.18 * (1 - f * 0.35)
                 let pos = surfacePoint(angleIndex: face, altitude: n.altitude, angleOffset: wobble)
                 if let prev = previous {
                     trailRoot.addChildNode(buildTrailConnector(from: prev, to: pos.position))
@@ -1380,10 +1368,10 @@ final class MountainSceneCoordinator: NSObject {
         // Camera sits low on the ground (you're standing on the grass) and climbs gently
         // as the user ascends. It stays world-static during rotation and looks upward at
         // the mountain, which is pushed back at z = -3.
-        let camY = 0.8 + Float(altClamped) * 4.5
-        // Much closer to the mountain — the camera stands right on the grass path at the
-        // front edge, beside the camp and altar, instead of floating far back.
-        let camDistance: Float = 9.5 - Float(altClamped) * 1.5
+        let camY = 1.1 + Float(altClamped) * 4.5
+        // Stand back a touch from the mountain so the whole diorama (camp, altar, slope)
+        // reads comfortably, while still feeling planted on the grass.
+        let camDistance: Float = 12.5 - Float(altClamped) * 1.5
         // Look upward toward the active ladera, but not so steeply that the foreground
         // ground anchors (camp + altar) fall out of frame.
         let lookY = camY + 2.4
