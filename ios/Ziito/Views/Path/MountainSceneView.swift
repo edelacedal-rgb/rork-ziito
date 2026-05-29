@@ -881,52 +881,129 @@ final class MountainSceneCoordinator: NSObject {
         let byFace = Dictionary(grouping: nodes, by: { $0.subjectIndex })
         for (face, faceNodes) in byFace {
             let sorted = faceNodes.sorted { $0.altitude < $1.altitude }
+            // The first not-yet-completed node is the "next" one to tackle — it bounces.
+            let nextIdx = sorted.firstIndex { !$0.completed }
             var previous: SCNVector3? = nil
-            for n in sorted {
+            for (i, n) in sorted.enumerated() {
                 // Gentle zig-zag so the path curves naturally up the slope.
                 let wobble = Float(sin(n.altitude * 9.0)) * 0.16
                 let pos = surfacePoint(angleIndex: face, altitude: n.altitude, angleOffset: wobble)
                 if let prev = previous {
                     trailRoot.addChildNode(buildTrailConnector(from: prev, to: pos.position))
                 }
-                trailRoot.addChildNode(buildTrailNode(n, at: pos))
+                trailRoot.addChildNode(buildTrailNode(n, at: pos, isNext: i == nextIdx))
                 previous = pos.position
             }
         }
     }
 
-    private func buildTrailNode(_ node: MountainTrailNode, at pos: SurfacePoint) -> SCNNode {
-        let disc = SCNCylinder(radius: 0.2, height: 0.05)
-        disc.radialSegmentCount = 24
-        let mat = SCNMaterial()
-        let earthDone = currentColors.isEmpty
-            ? UIColor(red: 0.78, green: 0.62, blue: 0.40, alpha: 1)
-            : currentColors[node.subjectIndex % currentColors.count].mixed(with: UIColor(red: 0.55, green: 0.43, blue: 0.28, alpha: 1), t: 0.45)
-        mat.diffuse.contents = node.completed ? earthDone : UIColor(white: 0.62, alpha: 1)
-        mat.lightingModel = .physicallyBased
-        mat.roughness.contents = 0.7
-        mat.metalness.contents = 0.0
-        disc.materials = [mat]
-        let discNode = SCNNode(geometry: disc)
-        // Lay the disc flat against the slope, facing outward.
-        discNode.eulerAngles = SCNVector3(Float.pi / 2, 0, 0)
-
+    /// A Duolingo-style milestone button: a chunky raised circular cap sitting on a
+    /// darker base (the 3D "pressed coin" depth), with a star on completed nodes. The
+    /// next node to tackle bounces gently to draw the eye.
+    private func buildTrailNode(_ node: MountainTrailNode, at pos: SurfacePoint, isNext: Bool) -> SCNNode {
         let root = SCNNode()
         root.position = pos.position
         root.eulerAngles.y = pos.outwardYaw
-        root.addChildNode(discNode)
 
-        // A subtle raised rim ring for a polished, integrated finish.
-        let ring = SCNTorus(ringRadius: 0.2, pipeRadius: 0.025)
+        // The whole button faces outward from the slope (cap toward the camera).
+        let button = SCNNode()
+        button.eulerAngles = SCNVector3(Float.pi / 2, 0, 0)
+        root.addChildNode(button)
+
+        let subjectColor = currentColors.isEmpty
+            ? UIColor(red: 0.35, green: 0.78, blue: 0.30, alpha: 1)
+            : currentColors[node.subjectIndex % currentColors.count]
+        let topColor = node.completed ? subjectColor : UIColor(white: 0.66, alpha: 1)
+        let baseColor = node.completed
+            ? subjectColor.mixed(with: .black, t: 0.42)
+            : UIColor(white: 0.42, alpha: 1)
+
+        // Darker base disc — the depth/shadow that makes the node read as a 3D button.
+        let base = SCNCylinder(radius: 0.27, height: 0.14)
+        base.radialSegmentCount = 28
+        let baseMat = SCNMaterial()
+        baseMat.diffuse.contents = baseColor
+        baseMat.lightingModel = .physicallyBased
+        baseMat.roughness.contents = 0.85
+        baseMat.metalness.contents = 0.0
+        base.materials = [baseMat]
+        let baseNode = SCNNode(geometry: base)
+        baseNode.position.y = -0.04
+        button.addChildNode(baseNode)
+
+        // Bright top cap raised toward the camera.
+        let cap = SCNCylinder(radius: 0.25, height: 0.13)
+        cap.radialSegmentCount = 28
+        let capMat = SCNMaterial()
+        capMat.diffuse.contents = topColor
+        capMat.lightingModel = .physicallyBased
+        capMat.roughness.contents = 0.55
+        capMat.metalness.contents = 0.0
+        cap.materials = [capMat]
+        let capNode = SCNNode(geometry: cap)
+        capNode.position.y = 0.075
+        button.addChildNode(capNode)
+
+        // A glossy inner ring on the cap face for the candy-button finish.
+        let ring = SCNTorus(ringRadius: 0.175, pipeRadius: 0.022)
         let rm = SCNMaterial()
-        rm.diffuse.contents = UIColor(white: node.completed ? 0.95 : 0.5, alpha: 1)
+        rm.diffuse.contents = node.completed ? UIColor(white: 1.0, alpha: 0.9) : UIColor(white: 0.85, alpha: 0.9)
         rm.lightingModel = .physicallyBased
-        rm.roughness.contents = 0.6
+        rm.roughness.contents = 0.4
         ring.materials = [rm]
         let ringNode = SCNNode(geometry: ring)
-        ringNode.eulerAngles = SCNVector3(Float.pi / 2, 0, 0)
-        ringNode.position.z = 0.03
-        root.addChildNode(ringNode)
+        ringNode.position.y = 0.14
+        button.addChildNode(ringNode)
+
+        // Icon on the cap face: a star for completed, a dot for upcoming.
+        let glyph = node.completed ? "★" : "●"
+        let icon = SCNText(string: glyph, extrusionDepth: 0.02)
+        icon.font = UIFont.systemFont(ofSize: 0.3, weight: .black)
+        icon.flatness = 0.04
+        let im = SCNMaterial()
+        im.diffuse.contents = node.completed ? UIColor.white : UIColor(white: 0.5, alpha: 1)
+        im.emission.contents = node.completed ? UIColor(white: 0.4, alpha: 1) : UIColor.clear
+        im.lightingModel = .constant
+        icon.materials = [im]
+        let iconNode = SCNNode(geometry: icon)
+        let (mn, mx) = icon.boundingBox
+        iconNode.position = SCNVector3(-(mx.x - mn.x) / 2, -(mx.y - mn.y) / 2, 0)
+        let iconPivot = SCNNode()
+        iconPivot.eulerAngles.x = -Float.pi / 2   // lay flat on the cap, glyph facing up/out
+        iconPivot.position.y = 0.155
+        iconPivot.addChildNode(iconNode)
+        button.addChildNode(iconPivot)
+
+        // The next node to conquer bounces gently to invite a tap.
+        if isNext {
+            let bounce = CABasicAnimation(keyPath: "position.y")
+            bounce.fromValue = pos.position.y
+            bounce.toValue = pos.position.y + 0.16
+            bounce.duration = 0.6
+            bounce.autoreverses = true
+            bounce.repeatCount = .infinity
+            bounce.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            root.addAnimation(bounce, forKey: "bounce")
+
+            // A soft glowing halo ring around the active node.
+            let halo = SCNTorus(ringRadius: 0.33, pipeRadius: 0.03)
+            let hm = SCNMaterial()
+            hm.diffuse.contents = subjectColor
+            hm.emission.contents = subjectColor
+            hm.lightingModel = .constant
+            halo.materials = [hm]
+            let haloNode = SCNNode(geometry: halo)
+            haloNode.eulerAngles = SCNVector3(Float.pi / 2, 0, 0)
+            haloNode.position.y = 0.05
+            let pulse = CABasicAnimation(keyPath: "opacity")
+            pulse.fromValue = 0.35
+            pulse.toValue = 0.9
+            pulse.duration = 0.8
+            pulse.autoreverses = true
+            pulse.repeatCount = .infinity
+            haloNode.addAnimation(pulse, forKey: "haloPulse")
+            button.addChildNode(haloNode)
+        }
         return root
     }
 
