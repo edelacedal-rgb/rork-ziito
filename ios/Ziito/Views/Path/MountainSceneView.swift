@@ -113,8 +113,6 @@ final class MountainSceneCoordinator: NSObject {
     private let flagsRoot = SCNNode()
     private let monumentsRoot = SCNNode()
     private let labelsRoot = SCNNode()
-    /// Always-visible winding route painted onto every mountain face.
-    private let staticTrailRoot = SCNNode()
     private let progressFog = SCNNode()
     private let gearRoot = SCNNode()
     /// Static flag altar anchored to the RIGHT of the diorama; mirrors planted flags.
@@ -155,7 +153,6 @@ final class MountainSceneCoordinator: NSObject {
         mountainPivot.addChildNode(flagsRoot)
         mountainPivot.addChildNode(monumentsRoot)
         mountainPivot.addChildNode(labelsRoot)
-        mountainPivot.addChildNode(staticTrailRoot)
         mountainPivot.addChildNode(progressFog)
         groundParent.addChildNode(gearRoot)
         groundParent.addChildNode(altarRoot)
@@ -461,7 +458,7 @@ final class MountainSceneCoordinator: NSObject {
         faceCount = max(3, colors.count)
 
         // Remove old mountain nodes (children of mountainPivot except special roots)
-        for child in mountainPivot.childNodes where child !== flagsRoot && child !== monumentsRoot && child !== labelsRoot && child !== progressFog && child !== staticTrailRoot && child !== groundParent {
+        for child in mountainPivot.childNodes where child !== flagsRoot && child !== monumentsRoot && child !== labelsRoot && child !== progressFog && child !== groundParent {
             child.removeFromParentNode()
         }
         faceMaterials = []
@@ -501,63 +498,8 @@ final class MountainSceneCoordinator: NSObject {
         haloNode.position.y = summit + 1.0
         mountainPivot.addChildNode(haloNode)
 
-        // Always-visible winding route painted up every face.
-        buildStaticTrails()
-
         // 3D billboard labels per face (subject names).
         rebuildFaceLabels(names: names)
-    }
-
-    /// Paints a continuous winding route up each mountain face so a clear trail is
-    /// always visible on the slope (independent of milestone data). Earth-toned, matte,
-    /// no glow — it hugs the craggy surface from the foot up to near the summit.
-    private func buildStaticTrails() {
-        staticTrailRoot.childNodes.forEach { $0.removeFromParentNode() }
-        let segs = max(1, faceCount)
-        let steps = 28
-        for face in 0..<segs {
-            var previous: SCNVector3? = nil
-            for i in 0...steps {
-                let f = Float(i) / Float(steps)
-                let alt = 0.04 + f * 0.9
-                // Gentle switchbacks that tighten toward the peak.
-                let wobble = sin(f * 7.0) * 0.18 * (1 - f * 0.35)
-                let sp = surfacePoint(angleIndex: face, altitude: Double(alt), angleOffset: wobble)
-                if let prev = previous {
-                    staticTrailRoot.addChildNode(buildPaintedPathSegment(from: prev, to: sp.position))
-                }
-                previous = sp.position
-            }
-        }
-    }
-
-    /// A FLAT, drawing-like ribbon segment of the painted mountain route. It's a thin
-    /// 2D plane draped on the slope (faces outward, length along the segment) with a
-    /// constant matte tone — reads as a painted line on the mountain, not a 3D tube.
-    private func buildPaintedPathSegment(from a: SCNVector3, to b: SCNVector3) -> SCNNode {
-        let dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z
-        let dist = sqrt(dx * dx + dy * dy + dz * dz)
-        let plane = SCNPlane(width: 0.34, height: CGFloat(max(0.001, dist)))
-        let m = SCNMaterial()
-        m.diffuse.contents = UIColor(red: 0.80, green: 0.69, blue: 0.49, alpha: 1)
-        // Constant shading = flat painted look (no 3D lighting on the line).
-        m.lightingModel = .constant
-        m.isDoubleSided = true
-        m.writesToDepthBuffer = false
-        plane.materials = [m]
-        let n = SCNNode(geometry: plane)
-        // Sit the ribbon flat on the surface, nudged slightly outward to avoid z-fighting.
-        let mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, mz = (a.z + b.z) / 2
-        let radial = sqrt(mx * mx + mz * mz)
-        let push: Float = radial > 0.001 ? 0.05 / radial : 0
-        n.position = SCNVector3(mx + mx * push, my, mz + mz * push)
-        // Face the plane outward (local +Z radial), length aligned to the segment.
-        n.look(
-            at: SCNVector3(n.position.x + mx, n.position.y, n.position.z + mz),
-            up: SCNVector3(dx, dy, dz),
-            localFront: SCNVector3(0, 0, 1)
-        )
-        return n
     }
 
     /// Floating low-relief subject sign anchored to each face's base, billboarded to camera.

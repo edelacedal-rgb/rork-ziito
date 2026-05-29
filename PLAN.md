@@ -29,8 +29,8 @@
 - **Snapping entre materias:** al soltar el swipe, el diorama interpola suavemente y encara exactamente una cara/materia frente a la cámara.
 - **Cámara baja anclada al suelo:** la cámara se posa baja sobre el pasto mirando claramente hacia arriba; la montaña se aleja (mismo tamaño, más al fondo) y el suelo se extiende hacia ti para no flotar.
 - **Suelo extendido:** un gran campo de pasto plano llega hasta el espectador, así estás parado en el terreno y no flotando sobre una plataforma.
-- **Ruta pintada en la montaña (2D):** cada cara muestra un sendero serpenteante siempre visible, dibujado como una línea plana en tonos tierra (sin tubos 3D, sin neón ni brillos), que sube desde el pie hasta cerca de la cima. Sin ningún nodo de hito (todo lo estilo Duolingo se eliminó por completo).
-- **Sendero del suelo en 3D:** el camino que cruza el pasto hacia el pie de la montaña son losas de piedra elevadas con volumen real (a diferencia de la ruta pintada de la montaña, que sigue siendo un dibujo plano).
+- **Montaña sin senderos:** la ladera queda limpia, sin ninguna ruta pintada ni nodos de hito (todo lo estilo Duolingo se eliminó por completo).
+- **Sendero del suelo en 3D:** el único sendero es el camino que cruza el pasto hacia el pie de la montaña, hecho de losas de piedra elevadas con volumen real.
 - **Cima despejada:** se retiró la niebla blanca de progreso; el pico queda limpio.
 - **Altar visible:** se eliminó el campamento; el altar de banderas se ubica al frente-derecha, dentro del encuadre de la cámara.
 - **Doble bandera:** al terminar un temporizador se planta una bandera en la cara activa de la montaña y una réplica aparece en el altar estático de la derecha.
