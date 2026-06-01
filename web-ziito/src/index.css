@@ -101,5 +101,12 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    overscroll-behavior-y: none;
+  }
+}
+
+@layer utilities {
+  .font-rounded {
+    font-family: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif;
   }
 }
