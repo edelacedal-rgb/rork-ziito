@@ -43,6 +43,7 @@ const KEYS = {
   sessions: "ziito.web.sessions",
   game: "ziito.web.game",
   settings: "ziito.web.pomodoro.settings",
+  tour: "ziito.web.tour",
 };
 
 function load<T>(key: string, fallback: T): T {
@@ -62,6 +63,20 @@ function save<T>(key: string, value: T): void {
     // ignore quota errors
   }
 }
+
+export interface TourState {
+  active: boolean;
+  step: number;
+  completed: boolean;
+  autoPrompted: boolean;
+}
+
+const DEFAULT_TOUR: TourState = {
+  active: false,
+  step: 0,
+  completed: false,
+  autoPrompted: false,
+};
 
 const DEFAULT_GAME: GamificationState = {
   hearts: MAX_HEARTS,
@@ -149,6 +164,13 @@ interface ZiitoContextValue {
   openFocus: () => void;
   minimizeFocus: () => void;
   lastReward: number; // timestamp of last flag planted, for UI flash
+
+  // guided tour
+  tour: TourState;
+  startTour: () => void;
+  closeTour: () => void;
+  setTourStep: (step: number) => void;
+  finishTour: () => void;
 }
 
 const ZiitoContext = createContext<ZiitoContextValue | null>(null);
@@ -178,6 +200,7 @@ export function ZiitoProvider({ children }: { children: ReactNode }) {
   const [now, setNow] = useState<number>(Date.now());
   const [focusVisible, setFocusVisible] = useState<boolean>(false);
   const [lastReward, setLastReward] = useState<number>(0);
+  const [tour, setTour] = useState<TourState>(() => load(KEYS.tour, DEFAULT_TOUR));
 
   // persistence
   useEffect(() => save(KEYS.subjects, subjects), [subjects]);
@@ -188,6 +211,36 @@ export function ZiitoProvider({ children }: { children: ReactNode }) {
   useEffect(() => save(KEYS.sessions, sessions), [sessions]);
   useEffect(() => save(KEYS.game, game), [game]);
   useEffect(() => save(KEYS.settings, settings), [settings]);
+  useEffect(() => save(KEYS.tour, tour), [tour]);
+
+  // ----- Guided tour -----
+
+  const startTour = useCallback(() => {
+    setTour({ active: true, step: 0, completed: false, autoPrompted: true });
+  }, []);
+
+  const closeTour = useCallback(() => {
+    setTour((t) => ({ ...t, active: false }));
+  }, []);
+
+  const setTourStep = useCallback((step: number) => {
+    setTour((t) => ({ ...t, step }));
+  }, []);
+
+  const finishTour = useCallback(() => {
+    setTour((t) => ({ ...t, active: false, completed: true }));
+  }, []);
+
+  // auto-prompt the tour once for brand-new, empty workspaces
+  useEffect(() => {
+    setTour((t) => {
+      if (t.autoPrompted) return t;
+      const isEmpty = subjects.length === 0 && classes.length === 0 && exams.length === 0;
+      return { ...t, autoPrompted: true, active: isEmpty && !t.completed ? true : t.active };
+    });
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ----- Gamification -----
 
@@ -574,6 +627,11 @@ export function ZiitoProvider({ children }: { children: ReactNode }) {
     openFocus,
     minimizeFocus,
     lastReward,
+    tour,
+    startTour,
+    closeTour,
+    setTourStep,
+    finishTour,
   };
 
   return <ZiitoContext.Provider value={value}>{children}</ZiitoContext.Provider>;

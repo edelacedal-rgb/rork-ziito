@@ -2,9 +2,15 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
     @State private var showingFocus = false
     @State private var selection: Tab = .today
     var pomodoro = PomodoroService.shared
+    var tour = TourManager.shared
+
+    @Query private var subjects: [Subject]
+    @Query private var classes: [ClassSession]
+    @Query private var exams: [Exam]
 
     enum Tab: Hashable {
         case today, schedule, path, more
@@ -45,10 +51,23 @@ struct ContentView: View {
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: pomodoro.isRunning)
+        .overlay(alignment: .bottom) {
+            if tour.isActive {
+                GuidedTourView(onFinish: { selection = .today })
+                    .padding(.bottom, 64)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.45, dampingFraction: 0.85), value: tour.isActive)
+        .animation(.spring(response: 0.45, dampingFraction: 0.85), value: tour.step)
         .fullScreenCover(isPresented: $showingFocus) {
             NavigationStack {
                 FocusModeView(onMinimize: { showingFocus = false })
             }
+        }
+        .task {
+            let isEmpty = subjects.isEmpty && classes.isEmpty && exams.isEmpty
+            tour.autoStartIfNeeded(isEmpty: isEmpty)
         }
     }
 }
@@ -124,6 +143,14 @@ struct MoreList: View {
             Section("Enfoque") {
                 NavigationLink { PomodoroSettingsView() } label: {
                     Label("Configurar Pomodoro", systemImage: "timer")
+                }
+            }
+
+            Section("Primeros pasos") {
+                Button {
+                    TourManager.shared.start()
+                } label: {
+                    Label("Guía del plan inteligente", systemImage: "sparkles")
                 }
             }
 

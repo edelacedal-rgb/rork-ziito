@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import { TabBar } from "@/components/app/TabBar";
 import { ActiveFocusBar } from "@/components/app/ActiveFocusBar";
 import { FocusMode } from "@/components/app/FocusMode";
+import { GuidedTour } from "@/components/app/GuidedTour";
 
 export function AppLayout() {
   return (
@@ -15,6 +16,7 @@ export function AppLayout() {
       </div>
       <TabBar />
       <FocusMode />
+      <GuidedTour />
     </div>
   );
 }

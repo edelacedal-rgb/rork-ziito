@@ -7,10 +7,12 @@ import {
   ChevronRight,
   ClipboardList,
   ListChecks,
+  Sparkles,
   Timer,
 } from "lucide-react";
 
 import { PomodoroSettingsDialog } from "@/components/app/PomodoroSettingsDialog";
+import { useZiito } from "@/store/ZiitoStore";
 
 const planning = [
   { to: "/mas/tareas", label: "Tareas", icon: ListChecks },
@@ -21,6 +23,7 @@ const planning = [
 
 export default function More() {
   const navigate = useNavigate();
+  const { startTour } = useZiito();
   const [showSettings, setShowSettings] = useState(false);
 
   return (
@@ -39,6 +42,17 @@ export default function More() {
 
       <Section title="Enfoque">
         <Row icon={Timer} label="Configurar Pomodoro" onClick={() => setShowSettings(true)} />
+      </Section>
+
+      <Section title="Primeros pasos">
+        <Row
+          icon={Sparkles}
+          label="Guía del plan inteligente"
+          onClick={() => {
+            startTour();
+            navigate("/");
+          }}
+        />
       </Section>
 
       <p className="px-1 text-xs leading-relaxed text-muted-foreground">
