@@ -200,7 +200,19 @@ export function ZiitoProvider({ children }: { children: ReactNode }) {
   const [now, setNow] = useState<number>(Date.now());
   const [focusVisible, setFocusVisible] = useState<boolean>(false);
   const [lastReward, setLastReward] = useState<number>(0);
-  const [tour, setTour] = useState<TourState>(() => load(KEYS.tour, DEFAULT_TOUR));
+  const [tour, setTour] = useState<TourState>(() => {
+    const persisted = load<TourState>(KEYS.tour, DEFAULT_TOUR);
+    if (persisted.autoPrompted || persisted.completed) return persisted;
+    // Auto-start the guide on the very first launch of an empty workspace,
+    // mirroring the iOS app so the user never has to hunt for a button.
+    const subjectsInit = load<Subject[]>(KEYS.subjects, []);
+    const classesInit = load<ClassSession[]>(KEYS.classes, []);
+    const examsInit = load<Exam[]>(KEYS.exams, []);
+    const isEmpty =
+      subjectsInit.length === 0 && classesInit.length === 0 && examsInit.length === 0;
+    if (!isEmpty) return persisted;
+    return { ...persisted, active: true, step: 0, autoPrompted: true };
+  });
 
   // persistence
   useEffect(() => save(KEYS.subjects, subjects), [subjects]);
@@ -229,17 +241,6 @@ export function ZiitoProvider({ children }: { children: ReactNode }) {
 
   const finishTour = useCallback(() => {
     setTour((t) => ({ ...t, active: false, completed: true }));
-  }, []);
-
-  // auto-prompt the tour once for brand-new, empty workspaces
-  useEffect(() => {
-    setTour((t) => {
-      if (t.autoPrompted) return t;
-      const isEmpty = subjects.length === 0 && classes.length === 0 && exams.length === 0;
-      return { ...t, autoPrompted: true, active: isEmpty && !t.completed ? true : t.active };
-    });
-    // run once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ----- Gamification -----
