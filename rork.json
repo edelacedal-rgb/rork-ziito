@@ -5,6 +5,11 @@
       "name": "Ziito",
       "path": "ios",
       "framework": "swift"
+    },
+    {
+      "name": "Ziito",
+      "path": "web-ziito",
+      "framework": "web"
     }
   ]
 }
