@@ -9,7 +9,10 @@
     {
       "name": "Ziito",
       "path": "web-ziito",
-      "framework": "web"
+      "framework": "web",
+      "settings": {
+        "webSlug": "ziito"
+      }
     }
   ]
 }
