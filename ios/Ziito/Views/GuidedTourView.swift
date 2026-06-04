@@ -93,7 +93,7 @@ struct GuidedTourView: View {
             HStack(spacing: 6) {
                 ForEach(0..<TourManager.stepCount, id: \.self) { i in
                     Capsule()
-                        .fill(i < step ? Color.indigo : (i == step ? Color.orange : Color.secondary.opacity(0.25)))
+                        .fill(i < step ? Color.zPrimary : (i == step ? Color.zAccent : Color.secondary.opacity(0.25)))
                         .frame(height: 4)
                         .frame(maxWidth: .infinity)
                 }
@@ -112,11 +112,11 @@ struct GuidedTourView: View {
             HStack(alignment: .top, spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.indigo.opacity(0.12))
+                        .fill(Color.zPrimary.opacity(0.12))
                         .frame(width: 46, height: 46)
                     Image(systemName: info.icon)
                         .font(.title3)
-                        .foregroundStyle(.indigo)
+                        .foregroundStyle(.zPrimary)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -150,7 +150,7 @@ struct GuidedTourView: View {
         .background(.ultraThinMaterial, in: .rect(cornerRadius: 24))
         .overlay(
             RoundedRectangle(cornerRadius: 24)
-                .stroke(Color.indigo.opacity(0.2), lineWidth: 1)
+                .stroke(Color.zPrimary.opacity(0.2), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.18), radius: 16, y: 8)
         .padding(.horizontal, 14)
@@ -197,7 +197,7 @@ struct GuidedTourView: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
-            .background(Color.indigo, in: .capsule)
+            .background(Color.zPrimary, in: .capsule)
         }
         .buttonStyle(.plain)
     }

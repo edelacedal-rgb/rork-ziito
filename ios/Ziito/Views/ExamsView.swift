@@ -15,7 +15,7 @@ struct ExamsView: View {
                         VStack(spacing: 12) {
                             Image(systemName: "pencil.and.list.clipboard")
                                 .font(.system(size: 48))
-                                .foregroundStyle(.indigo.opacity(0.5))
+                                .foregroundStyle(.zPrimary.opacity(0.5))
 
                             Text("Sin evaluaciones")
                                 .font(.headline)
@@ -68,7 +68,7 @@ struct ExamsView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: { showingAddSheet = true }) {
                         Image(systemName: "plus")
-                            .foregroundStyle(.indigo)
+                            .foregroundStyle(.zPrimary)
                     }
                 }
             }
@@ -205,7 +205,7 @@ struct AddExamView: View {
 
                                 if selectedSubjectID == subject.id {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.indigo)
+                                        .foregroundStyle(.zPrimary)
                                 }
                             }
                             .contentShape(.rect)

@@ -75,7 +75,7 @@ struct TodayView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: generatePlan) {
                         Image(systemName: "wand.and.stars")
-                            .foregroundStyle(.indigo)
+                            .foregroundStyle(.zPrimary)
                     }
                     .disabled(viewModel.isGeneratingPlan)
                 }
@@ -103,7 +103,7 @@ struct TodayView: View {
 
     private func inClassBanner(_ c: ClassSession) -> some View {
         let subject = subjects.first { $0.id == c.subjectID }
-        let color = subject?.color ?? .indigo
+        let color = subject?.color ?? .zPrimary
         return HStack(spacing: 14) {
             Image(systemName: "graduationcap.fill")
                 .foregroundStyle(.white)
@@ -138,13 +138,13 @@ struct TodayView: View {
                 }
                 Spacer()
                 Image(systemName: "play.fill")
-                    .foregroundStyle(.indigo)
+                    .foregroundStyle(.zPrimary)
                     .padding(10)
                     .background(.white, in: .circle)
             }
             .padding()
-            .background(LinearGradient(colors: [.indigo, .purple], startPoint: .leading, endPoint: .trailing), in: .rect(cornerRadius: 18))
-            .shadow(color: .indigo.opacity(0.35), radius: 14, y: 8)
+            .background(LinearGradient(colors: [.zPrimary, .zPrimaryBright], startPoint: .leading, endPoint: .trailing), in: .rect(cornerRadius: 18))
+            .shadow(color: .zPrimary.opacity(0.35), radius: 14, y: 8)
         }
         .buttonStyle(.plain)
     }
@@ -153,10 +153,10 @@ struct TodayView: View {
         Button(action: onStartFocus) {
             HStack(spacing: 14) {
                 Image(systemName: "timer")
-                    .foregroundStyle(.indigo)
+                    .foregroundStyle(.zPrimary)
                     .font(.title2)
                     .frame(width: 50, height: 50)
-                    .background(Color.indigo.opacity(0.12), in: .circle)
+                    .background(Color.zPrimary.opacity(0.12), in: .circle)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(pomodoro.isRunning ? "Sesión en curso" : "Inicia una sesión de enfoque")
                         .font(.headline)
@@ -188,7 +188,7 @@ struct TodayView: View {
 
     private func timelineRow(c: ClassSession, isLast: Bool) -> some View {
         let subject = subjects.first { $0.id == c.subjectID }
-        let color = subject?.color ?? .indigo
+        let color = subject?.color ?? .zPrimary
         let nowMin = ClassSession.minutes(from: nowTick)
         let isPast = nowMin >= c.endMinuteOfDay
         let isCurrent = nowMin >= c.startMinuteOfDay && nowMin < c.endMinuteOfDay
@@ -245,10 +245,10 @@ struct TodayView: View {
                     Text("\(completedItems)/\(totalItems) completadas")
                         .font(.caption)
                         .fontWeight(.medium)
-                        .foregroundStyle(completedItems == totalItems ? .green : .indigo)
+                        .foregroundStyle(completedItems == totalItems ? .green : .zPrimary)
 
                     ProgressView(value: Double(completedItems), total: Double(totalItems))
-                        .tint(completedItems == totalItems ? .green : .indigo)
+                        .tint(completedItems == totalItems ? .green : .zPrimary)
                 }
                 .padding(.top, 4)
             }
@@ -260,7 +260,7 @@ struct TodayView: View {
                 .fill(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.indigo.opacity(0.2), lineWidth: 1)
+                        .stroke(Color.zPrimary.opacity(0.2), lineWidth: 1)
                 )
         }
     }
@@ -366,7 +366,7 @@ struct TodayView: View {
         VStack(spacing: 16) {
             Image(systemName: "calendar.badge.plus")
                 .font(.system(size: 56))
-                .foregroundStyle(.indigo.opacity(0.6))
+                .foregroundStyle(.zPrimary.opacity(0.6))
 
             Text("Genera tu plan de estudio")
                 .font(.title3)
@@ -387,7 +387,7 @@ struct TodayView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 14)
-                .background(Color.indigo)
+                .background(Color.zPrimary)
                 .clipShape(.rect(cornerRadius: 14))
             }
         }
@@ -446,7 +446,7 @@ struct TaskRowToday: View {
             Button(action: onToggle) {
                 Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
-                    .foregroundStyle(task.isCompleted ? .green : (subject?.color ?? .indigo))
+                    .foregroundStyle(task.isCompleted ? .green : (subject?.color ?? .zPrimary))
                     .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
@@ -495,7 +495,7 @@ struct TaskMiniRow: View {
                     .frame(width: 10, height: 10)
             } else {
                 Circle()
-                    .fill(.indigo)
+                    .fill(.zPrimary)
                     .frame(width: 10, height: 10)
             }
 

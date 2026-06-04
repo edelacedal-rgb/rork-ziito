@@ -53,7 +53,7 @@ struct StatsView: View {
 
     private var summaryCards: some View {
         HStack(spacing: 12) {
-            StatCard(icon: "clock.fill", color: .indigo, label: "Total \(rangeDays)d", value: "\(totalThisWeek / 60)h \(totalThisWeek % 60)m")
+            StatCard(icon: "clock.fill", color: .zPrimary, label: "Total \(rangeDays)d", value: "\(totalThisWeek / 60)h \(totalThisWeek % 60)m")
             StatCard(icon: "flame.fill", color: .orange, label: "Racha", value: "\(streak) d")
             StatCard(icon: "checkmark.seal.fill", color: .green, label: "Sesiones", value: "\(logs.count)")
         }
@@ -77,7 +77,7 @@ struct StatsView: View {
                     x: .value("Día", item.date, unit: .day),
                     y: .value("Minutos", item.minutes)
                 )
-                .foregroundStyle(LinearGradient(colors: [.indigo, .purple], startPoint: .top, endPoint: .bottom))
+                .foregroundStyle(LinearGradient(colors: [.zPrimary, .zPrimaryBright], startPoint: .top, endPoint: .bottom))
                 .cornerRadius(6)
             }
             .frame(height: 220)
@@ -131,7 +131,7 @@ struct StatsView: View {
                 ForEach(logs.prefix(8)) { log in
                     HStack(spacing: 12) {
                         Image(systemName: log.mode == .pomodoro ? "timer" : "infinity")
-                            .foregroundStyle(.indigo)
+                            .foregroundStyle(.zPrimary)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(log.startedAt.formatted(date: .abbreviated, time: .shortened))
                                 .font(.subheadline.weight(.medium))

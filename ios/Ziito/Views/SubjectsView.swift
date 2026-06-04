@@ -21,7 +21,7 @@ struct SubjectsView: View {
                         VStack(spacing: 12) {
                             Image(systemName: "books.vertical")
                                 .font(.system(size: 48))
-                                .foregroundStyle(.indigo.opacity(0.5))
+                                .foregroundStyle(.zPrimary.opacity(0.5))
 
                             Text("Sin materias")
                                 .font(.headline)
@@ -51,7 +51,7 @@ struct SubjectsView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: { showingAddSheet = true }) {
                         Image(systemName: "plus")
-                            .foregroundStyle(.indigo)
+                            .foregroundStyle(.zPrimary)
                     }
                 }
             }

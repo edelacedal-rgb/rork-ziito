@@ -75,7 +75,7 @@ struct TasksView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: { showingAddSheet = true }) {
                         Image(systemName: "plus")
-                            .foregroundStyle(.indigo)
+                            .foregroundStyle(.zPrimary)
                     }
                 }
             }
@@ -92,7 +92,7 @@ struct TasksView: View {
         VStack(spacing: 12) {
             Image(systemName: "checklist")
                 .font(.system(size: 48))
-                .foregroundStyle(.indigo.opacity(0.5))
+                .foregroundStyle(.zPrimary.opacity(0.5))
 
             Text("Sin tareas")
                 .font(.headline)
@@ -161,7 +161,7 @@ struct TaskRow: View {
             Button(action: onToggle) {
                 Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
-                    .foregroundStyle(task.isCompleted ? .green : (subject?.color ?? .indigo))
+                    .foregroundStyle(task.isCompleted ? .green : (subject?.color ?? .zPrimary))
                     .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
@@ -197,7 +197,7 @@ struct TaskRow: View {
                 if task.isSyncedToCalendar {
                     Image(systemName: "calendar.badge.checkmark")
                         .font(.caption)
-                        .foregroundStyle(.indigo)
+                        .foregroundStyle(.zPrimary)
                 }
 
                 PriorityBadge(priority: task.priority)
@@ -217,7 +217,7 @@ struct TaskRow: View {
             } label: {
                 Label("Sincronizar", systemImage: "calendar.badge.plus")
             }
-            .tint(.indigo)
+            .tint(.zPrimary)
         }
     }
 
@@ -292,7 +292,7 @@ struct AddTaskView: View {
 
                                 if selectedSubjectID == subject.id {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.indigo)
+                                        .foregroundStyle(.zPrimary)
                                 }
                             }
                             .contentShape(.rect)

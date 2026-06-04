@@ -42,7 +42,7 @@ struct CalendarView: View {
             Button(action: previousMonth) {
                 Image(systemName: "chevron.left")
                     .font(.title3)
-                    .foregroundStyle(.indigo)
+                    .foregroundStyle(.zPrimary)
             }
 
             Spacer()
@@ -57,7 +57,7 @@ struct CalendarView: View {
             Button(action: nextMonth) {
                 Image(systemName: "chevron.right")
                     .font(.title3)
-                    .foregroundStyle(.indigo)
+                    .foregroundStyle(.zPrimary)
             }
         }
         .padding(.vertical, 8)
@@ -113,10 +113,10 @@ struct CalendarView: View {
                     Text("Hoy")
                         .font(.caption2)
                         .fontWeight(.bold)
-                        .foregroundStyle(.indigo)
+                        .foregroundStyle(.zPrimary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color.indigo.opacity(0.12))
+                        .background(Color.zPrimary.opacity(0.12))
                         .clipShape(.capsule)
                 }
             }
@@ -210,7 +210,7 @@ struct CalendarView: View {
                 .fill(Color(.systemGroupedBackground))
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.indigo.opacity(0.15), lineWidth: 1)
+                        .stroke(Color.zPrimary.opacity(0.15), lineWidth: 1)
                 )
         }
     }
@@ -225,7 +225,7 @@ struct CalendarView: View {
             HStack(spacing: 16) {
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(Color.indigo)
+                        .fill(Color.zPrimary)
                         .frame(width: 8, height: 8)
                     Text("Sesión")
                         .font(.caption)
@@ -309,17 +309,17 @@ struct DayCell: View {
                 .background {
                     if isToday {
                         Circle()
-                            .fill(Color.indigo)
+                            .fill(Color.zPrimary)
                     } else if isSelected {
                         Circle()
-                            .fill(Color.indigo.opacity(0.2))
+                            .fill(Color.zPrimary.opacity(0.2))
                     }
                 }
 
             HStack(spacing: 2) {
                 if !sessions.isEmpty {
                     Circle()
-                        .fill(Color.indigo)
+                        .fill(Color.zPrimary)
                         .frame(width: 5, height: 5)
                 }
                 if hasExam {

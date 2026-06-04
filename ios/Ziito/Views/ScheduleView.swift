@@ -45,7 +45,7 @@ struct ScheduleView: View {
                 Button { showingAdd = true } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3)
-                        .foregroundStyle(.indigo)
+                        .foregroundStyle(.zPrimary)
                 }
             }
         }
@@ -74,7 +74,7 @@ struct ScheduleView: View {
                         Text(day.shortLabel.uppercased())
                             .font(.caption2.weight(.heavy))
                             .tracking(1)
-                            .foregroundStyle(isSelected ? .white : (isToday ? .indigo : .secondary))
+                            .foregroundStyle(isSelected ? .white : (isToday ? .zPrimary : .secondary))
                         Text("\(classes.filter { $0.weekdayRaw == day.rawValue }.count)")
                             .font(.caption.monospacedDigit().weight(.semibold))
                             .foregroundStyle(isSelected ? .white : .primary)
@@ -83,11 +83,11 @@ struct ScheduleView: View {
                     .padding(.vertical, 8)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(isSelected ? Color.indigo : Color(.secondarySystemGroupedBackground))
+                            .fill(isSelected ? Color.zPrimary : Color(.secondarySystemGroupedBackground))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(isToday && !isSelected ? Color.indigo.opacity(0.5) : .clear, lineWidth: 1)
+                            .stroke(isToday && !isSelected ? Color.zPrimary.opacity(0.5) : .clear, lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -165,7 +165,7 @@ struct ScheduleView: View {
     private func blockCard(block: LaidOutBlock) -> some View {
         let c = block.session
         let subject = subjects.first { $0.id == c.subjectID }
-        let color = subject?.color ?? .indigo
+        let color = subject?.color ?? .zPrimary
         let name = subject?.name ?? (c.customName.isEmpty ? "Clase" : c.customName)
         return Button {
             editing = c

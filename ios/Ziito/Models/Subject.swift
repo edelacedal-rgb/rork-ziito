@@ -22,6 +22,20 @@ final class Subject {
 }
 
 extension Color {
+    /// Brand palette mirroring the Ziito web app.
+    /// Forest green primary with an amber accent over a soft mint canvas.
+    static let zPrimary = Color(red: 0.094, green: 0.427, blue: 0.306)      // #186D4E forest green
+    static let zPrimaryBright = Color(red: 0.020, green: 0.588, blue: 0.412) // #059669 emerald-600
+    static let zAccent = Color(red: 0.965, green: 0.659, blue: 0.137)        // #F6A823 amber
+}
+
+/// Lets the brand colors be used with the leading-dot syntax in
+/// `foregroundStyle`, `tint`, `fill`, etc. (mirroring `.indigo`, `.accent`).
+extension ShapeStyle where Self == Color {
+    static var zPrimary: Color { Color.zPrimary }
+    static var zPrimaryBright: Color { Color.zPrimaryBright }
+    static var zAccent: Color { Color.zAccent }
+
     init?(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0
