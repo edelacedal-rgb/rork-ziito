@@ -12,7 +12,7 @@ struct GamificationBar: View {
             stat(
                 icon: "flame.fill",
                 value: "\(game.streak)",
-                tint: game.streakActiveToday ? .orange : .gray,
+                tint: game.streakActiveToday ? .zAccent : .gray,
                 glow: game.streakActiveToday
             )
             stat(
@@ -28,10 +28,11 @@ struct GamificationBar: View {
                 glow: false
             )
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: .capsule)
-        .overlay(Capsule().stroke(Color.primary.opacity(0.06)))
+        .background(Color.zCardBG, in: .capsule)
+        .overlay(Capsule().stroke(Color.zBorder, lineWidth: 1))
+        .shadow(color: .black.opacity(0.04), radius: 4, y: 2)
         .contentShape(.capsule)
         .onTapGesture {
             Haptics.tap(.light)
@@ -83,7 +84,8 @@ struct RewardsDetailSheet: View {
                 }
                 .padding()
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Color.zBackground)
+            .scrollContentBackground(.hidden)
             .navigationTitle("Tu progreso")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -97,8 +99,8 @@ struct RewardsDetailSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 ZStack {
-                    Circle().fill(.yellow.opacity(0.2)).frame(width: 46, height: 46)
-                    Text("\(game.level)").font(.title3.weight(.heavy)).foregroundStyle(.orange)
+                    Circle().fill(Color.zAccent.opacity(0.2)).frame(width: 46, height: 46)
+                    Text("\(game.level)").font(.title3.weight(.heavy)).foregroundStyle(.zAccent)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Nivel \(game.level)").font(.headline)
@@ -107,7 +109,7 @@ struct RewardsDetailSheet: View {
                 Spacer()
             }
             ProgressView(value: game.levelProgress)
-                .tint(.orange)
+                .tint(.zAccent)
             Text("\(game.xpInLevel)/\(game.xpForLevel) XP para el nivel \(game.level + 1)")
                 .font(.caption2).foregroundStyle(.secondary)
         }
@@ -141,7 +143,7 @@ struct RewardsDetailSheet: View {
         VStack(spacing: 8) {
             Image(systemName: "flame.fill")
                 .font(.title2)
-                .foregroundStyle(game.streakActiveToday ? .orange : .gray)
+                .foregroundStyle(game.streakActiveToday ? .zAccent : .gray)
             Text("\(game.streak) días").font(.headline.monospacedDigit())
             Text("Racha · récord \(game.longestStreak)")
                 .font(.caption2).foregroundStyle(.secondary)
@@ -172,7 +174,7 @@ struct RewardsDetailSheet: View {
                     Text("\(GamificationService.freezeCost) XP")
                         .font(.caption.weight(.bold))
                         .padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(game.canBuyFreeze ? Color.orange : Color.gray.opacity(0.4), in: .capsule)
+                        .background(game.canBuyFreeze ? Color.zAccent : Color.gray.opacity(0.4), in: .capsule)
                         .foregroundStyle(.white)
                 }
                 .disabled(!game.canBuyFreeze)
@@ -215,7 +217,7 @@ private struct HeatmapGrid: View {
                 let day = calendar.date(byAdding: .day, value: -offset, to: today) ?? today
                 let active = game.studied(on: day)
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(active ? Color.green : Color.secondary.opacity(0.12))
+                    .fill(active ? Color.zPrimary : Color.secondary.opacity(0.12))
                     .aspectRatio(1, contentMode: .fit)
             }
         }

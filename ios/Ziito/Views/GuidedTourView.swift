@@ -147,17 +147,17 @@ struct GuidedTourView: View {
             actionRow
         }
         .padding(16)
-        .background(.ultraThinMaterial, in: .rect(cornerRadius: 24))
+        .background(Color.zCardBG, in: .rect(cornerRadius: 24))
         .overlay(
             RoundedRectangle(cornerRadius: 24)
                 .stroke(Color.zPrimary.opacity(0.2), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.18), radius: 16, y: 8)
-        .padding(.horizontal, 14)
+        .shadow(color: Color.zPrimary.opacity(0.2), radius: 20, y: 10)
+        .padding(.horizontal, 16)
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .subject: AddSubjectView(presetColors: presetColors)
-            case .classSession: AddClassView()
+            case .classSession: ClassDialog(editing: nil, defaultDay: Weekday(rawValue: Calendar.current.component(.weekday, from: Date())) ?? .monday)
             case .exam: AddExamView()
             }
         }

@@ -3,242 +3,123 @@ import SwiftData
 
 struct TasksView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     @State private var viewModel = PlannerViewModel()
     @Query(sort: \Subject.name) private var subjects: [Subject]
     @Query(sort: \StudyTask.dueDate) private var allTasks: [StudyTask]
 
-    @State private var showingAddSheet = false
-    @State private var selectedFilter: TaskFilter = .all
+    @State private var showingAdd = false
+    @State private var filter: Filter = .all
 
-    enum TaskFilter: String, CaseIterable {
-        case all = "Todas"
-        case pending = "Pendientes"
-        case completed = "Completadas"
-        case overdue = "Vencidas"
+    enum Filter: String, CaseIterable {
+        case all = "Todas", pending = "Pendientes", completed = "Completadas", overdue = "Vencidas"
     }
 
-    private var filteredTasks: [StudyTask] {
-        switch selectedFilter {
-        case .all:
-            return allTasks
-        case .pending:
-            return allTasks.filter { !$0.isCompleted && !$0.isOverdue }
-        case .completed:
-            return allTasks.filter(\.isCompleted)
-        case .overdue:
-            return allTasks.filter(\.isOverdue)
+    private var filtered: [StudyTask] {
+        switch filter {
+        case .all: return allTasks
+        case .pending: return allTasks.filter { !$0.isCompleted && !$0.isOverdue }
+        case .completed: return allTasks.filter(\.isCompleted)
+        case .overdue: return allTasks.filter(\.isOverdue)
         }
     }
-
-    private var overdueCount: Int {
-        allTasks.filter(\.isOverdue).count
-    }
+    private var overdueCount: Int { allTasks.filter(\.isOverdue).count }
 
     var body: some View {
-        NavigationStack {
-            List {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                ZScreenHeader(title: "Tareas", onBack: { dismiss() }, onAdd: { showingAdd = true })
+
                 if allTasks.isEmpty {
-                    Section {
-                        emptyState
-                    }
+                    ZEmptyState(icon: "checklist", title: "Sin tareas", desc: "Agrega tareas para organizar tu estudio")
                 } else {
-                    filterSection
-
-                    if overdueCount > 0 && selectedFilter != .completed {
-                        overdueBanner
-                    }
-
-                    Section {
-                        ForEach(filteredTasks) { task in
-                            TaskRow(
-                                task: task,
-                                subject: subjects.first(where: { $0.id == task.subjectID }),
-                                onToggle: {
-                                    viewModel.toggleTaskCompletion(task, modelContext: modelContext)
-                                },
-                                onSync: {
-                                    Task {
-                                        await syncTask(task)
-                                    }
-                                }
-                            )
+                    segmented
+                    if overdueCount > 0 && filter != .completed {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.zAccent).font(.subheadline)
+                            Text("\(overdueCount) tarea(s) vencida(s)").font(.subheadline.weight(.medium)).foregroundStyle(.zForeground)
+                            Spacer()
                         }
-                        .onDelete { offsets in
-                            deleteTasks(at: offsets, in: filteredTasks)
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .background(Color.zAccent.opacity(0.1), in: .rect(cornerRadius: 12))
+                    }
+                    VStack(spacing: 8) {
+                        ForEach(filtered) { task in
+                            taskRow(task)
                         }
                     }
                 }
             }
-            .listStyle(.insetGrouped)
-            .navigationTitle("Tareas")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: { showingAddSheet = true }) {
-                        Image(systemName: "plus")
-                            .foregroundStyle(.zPrimary)
-                    }
+            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 100)
+        }
+        .background(Color.zBackground)
+        .scrollContentBackground(.hidden)
+        .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showingAdd) { AddTaskView() }
+        .onAppear { viewModel.loadTasks(modelContext: modelContext) }
+    }
+
+    private var segmented: some View {
+        HStack(spacing: 4) {
+            ForEach(Filter.allCases, id: \.self) { f in
+                Button { filter = f } label: {
+                    Text(f.rawValue)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(filter == f ? Color.zForeground : Color.zMuted)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background(filter == f ? Color.zCardBG : .clear, in: .rect(cornerRadius: 8))
+                        .shadow(color: filter == f ? .black.opacity(0.06) : .clear, radius: 3, y: 1)
                 }
-            }
-            .sheet(isPresented: $showingAddSheet) {
-                AddTaskView()
-            }
-            .onAppear {
-                viewModel.loadTasks(modelContext: modelContext)
+                .buttonStyle(.plain)
             }
         }
+        .padding(4)
+        .background(Color.zSecondaryBG, in: .rect(cornerRadius: 12))
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "checklist")
-                .font(.system(size: 48))
-                .foregroundStyle(.zPrimary.opacity(0.5))
-
-            Text("Sin tareas")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-
-            Text("Agrega tareas para organizar tu estudio")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
-        .listRowBackground(Color.clear)
-    }
-
-    private var filterSection: some View {
-        Section {
-            Picker("Filtro", selection: $selectedFilter) {
-                ForEach(TaskFilter.allCases, id: \.self) { filter in
-                    Text(filter.rawValue).tag(filter)
+    private func taskRow(_ task: StudyTask) -> some View {
+        let subject = subjects.first { $0.id == task.subjectID }
+        let overdue = task.isOverdue
+        return HStack(spacing: 12) {
+            Button { viewModel.toggleTaskCompletion(task, modelContext: modelContext) } label: {
+                ZStack {
+                    Circle()
+                        .strokeBorder(task.isCompleted ? Color.zPrimary : (subject?.color ?? Color.zMuted.opacity(0.4)), lineWidth: 2)
+                        .background(Circle().fill(task.isCompleted ? Color.zPrimary : .clear))
+                        .frame(width: 24, height: 24)
+                    if task.isCompleted { Image(systemName: "checkmark").font(.caption2.weight(.bold)).foregroundStyle(.white) }
                 }
-            }
-            .pickerStyle(.segmented)
-        }
-        .listRowBackground(Color.clear)
-    }
-
-    private var overdueBanner: some View {
-        Section {
-            HStack(spacing: 10) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-
-                Text("\(overdueCount) tarea(s) vencida(s)")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-
-                Spacer()
-            }
-            .padding(.vertical, 4)
-        }
-    }
-
-    private func syncTask(_ task: StudyTask) async {
-        let subject = subjects.first(where: { $0.id == task.subjectID })
-        await viewModel.syncTaskToCalendar(task, subject: subject, modelContext: modelContext)
-        await viewModel.scheduleTaskNotifications(task, subject: subject)
-    }
-
-    private func deleteTasks(at offsets: IndexSet, in array: [StudyTask]) {
-        for index in offsets {
-            let task = array[index]
-            viewModel.deleteTask(task, modelContext: modelContext)
-        }
-    }
-}
-
-struct TaskRow: View {
-    let task: StudyTask
-    let subject: Subject?
-    let onToggle: () -> Void
-    let onSync: () -> Void
-
-    var body: some View {
-        HStack(spacing: 14) {
-            Button(action: onToggle) {
-                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(task.isCompleted ? .green : (subject?.color ?? .zPrimary))
-                    .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
-
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(task.title)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(task.isCompleted ? .secondary : .primary)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(task.isCompleted ? Color.zMuted : Color.zForeground)
                     .strikethrough(task.isCompleted)
-
                 HStack(spacing: 6) {
-                    if let subject = subject {
-                        Circle()
-                            .fill(subject.color)
-                            .frame(width: 8, height: 8)
-
-                        Text(subject.name)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    if let subject {
+                        Circle().fill(subject.color).frame(width: 8, height: 8)
+                        Text(subject.name).font(.caption).foregroundStyle(.zMuted)
                     }
-
-                    Text(formattedDate)
+                    Text(ZDate.shortDate(task.dueDate))
                         .font(.caption)
-                        .foregroundStyle(dateColor)
-                        .fontWeight(task.isOverdue && !task.isCompleted ? .semibold : .regular)
+                        .foregroundStyle(overdue ? Color.zAccent : (task.daysUntil <= 1 ? .red : Color.zMuted))
+                        .fontWeight(overdue ? .semibold : .regular)
                 }
             }
-
             Spacer()
-
-            HStack(spacing: 8) {
-                if task.isSyncedToCalendar {
-                    Image(systemName: "calendar.badge.checkmark")
-                        .font(.caption)
-                        .foregroundStyle(.zPrimary)
-                }
-
-                PriorityBadge(priority: task.priority)
-            }
-        }
-        .padding(.vertical, 4)
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive) {
-                // Handled by onDelete
-            } label: {
-                Label("Eliminar", systemImage: "trash")
-            }
-        }
-        .swipeActions(edge: .leading) {
+            ZPriorityBadge(priority: task.priority)
             Button {
-                onSync()
+                Haptics.tap(.light)
+                viewModel.deleteTask(task, modelContext: modelContext)
             } label: {
-                Label("Sincronizar", systemImage: "calendar.badge.plus")
+                Image(systemName: "trash").font(.subheadline).foregroundStyle(.zMuted.opacity(0.5))
             }
-            .tint(.zPrimary)
+            .buttonStyle(.plain)
         }
-    }
-
-    private var formattedDate: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "es_ES")
-        formatter.dateFormat = "d MMM"
-        return formatter.string(from: task.dueDate)
-    }
-
-    private var dateColor: Color {
-        if task.isCompleted {
-            return .secondary
-        }
-        if task.isOverdue {
-            return .orange
-        }
-        if task.daysUntil <= 1 {
-            return .red
-        }
-        return .secondary
+        .padding(16)
+        .zCard()
     }
 }
 
@@ -246,139 +127,45 @@ struct AddTaskView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Subject.name) private var subjects: [Subject]
-    @State private var viewModel = PlannerViewModel()
 
-    @State private var title: String = ""
-    @State private var notes: String = ""
-    @State private var dueDate: Date = Calendar.current.date(byAdding: .day, value: 3, to: Date())!
-    @State private var selectedSubjectID: UUID? = nil
+    @State private var title = ""
+    @State private var notes = ""
+    @State private var dueDate = Calendar.current.date(byAdding: .day, value: 3, to: Date())!
+    @State private var subjectID: UUID?
     @State private var priority: PriorityLevel = .medium
-    @State private var syncToCalendar = false
-    @State private var enableReminder = true
 
-    private var canSave: Bool {
-        !title.trimmingCharacters(in: .whitespaces).isEmpty
-    }
+    private var canSave: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Detalles") {
-                    TextField("Título de la tarea", text: $title)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    TextField("Título de la tarea", text: $title).textFieldStyle(.roundedBorder)
                     TextField("Notas (opcional)", text: $notes, axis: .vertical)
                         .lineLimit(3...6)
-
-                    DatePicker("Fecha de vencimiento", selection: $dueDate, displayedComponents: .date)
+                        .textFieldStyle(.roundedBorder)
+                    DatePicker("Fecha", selection: $dueDate, displayedComponents: .date)
+                    SubjectPicker(subjects: subjects, value: $subjectID, allowNone: true)
+                    PriorityPicker(value: $priority)
                 }
-
-                Section("Materia") {
-                    if subjects.isEmpty {
-                        Text("Primero crea una materia en la pestaña Materias")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(subjects) { subject in
-                            HStack {
-                                HStack(spacing: 10) {
-                                    Circle()
-                                        .fill(subject.color)
-                                        .frame(width: 12, height: 12)
-
-                                    Text(subject.name)
-                                        .font(.body)
-                                }
-
-                                Spacer()
-
-                                if selectedSubjectID == subject.id {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.zPrimary)
-                                }
-                            }
-                            .contentShape(.rect)
-                            .onTapGesture {
-                                selectedSubjectID = subject.id
-                            }
-                        }
-                    }
-                }
-
-                Section("Prioridad") {
-                    VStack(spacing: 12) {
-                        HStack {
-                            Text("Nivel: \(priority.label)")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-
-                            Spacer()
-
-                            Circle()
-                                .fill(Color(hex: priority.colorName) ?? .gray)
-                                .frame(width: 12, height: 12)
-                        }
-
-                        Picker("Prioridad", selection: $priority) {
-                            ForEach(PriorityLevel.allCases, id: \.self) { level in
-                                Text(level.label).tag(level)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                }
-
-                Section("Sincronización") {
-                    Toggle("Sincronizar con Calendario", isOn: $syncToCalendar)
-                    Toggle("Recordatorio push", isOn: $enableReminder)
-                }
+                .padding(20)
             }
+            .background(Color.zBackground)
+            .scrollContentBackground(.hidden)
             .navigationTitle("Nueva Tarea")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Guardar") {
-                        addTask()
-                    }
-                    .disabled(!canSave)
-                }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Guardar") { add() }.disabled(!canSave) }
             }
         }
     }
 
-    private func addTask() {
+    private func add() {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-
-        let task = StudyTask(
-            title: trimmed,
-            notes: notes,
-            dueDate: dueDate,
-            priority: priority,
-            subjectID: selectedSubjectID
-        )
-        modelContext.insert(task)
-
-        do {
-            try modelContext.save()
-        } catch {
-            print("Error saving task: \(error)")
-            return
-        }
-
-        Task {
-            let subject = subjects.first(where: { $0.id == selectedSubjectID })
-
-            if syncToCalendar {
-                await viewModel.syncTaskToCalendar(task, subject: subject, modelContext: modelContext)
-            }
-
-            if enableReminder {
-                await viewModel.scheduleTaskNotifications(task, subject: subject)
-            }
-        }
-
+        modelContext.insert(StudyTask(title: trimmed, notes: notes, dueDate: dueDate, priority: priority, subjectID: subjectID))
+        try? modelContext.save()
         dismiss()
     }
 }

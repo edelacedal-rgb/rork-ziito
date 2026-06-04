@@ -361,22 +361,21 @@ struct PomodoroSettingsView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Duraciones") {
-                    Stepper("Enfoque: \(draft.focusMinutes) min", value: $draft.focusMinutes, in: 5...90, step: 5)
-                    Stepper("Descanso corto: \(draft.shortBreakMinutes) min", value: $draft.shortBreakMinutes, in: 1...30)
-                    Stepper("Descanso largo: \(draft.longBreakMinutes) min", value: $draft.longBreakMinutes, in: 5...60, step: 5)
+            ScrollView {
+                VStack(spacing: 8) {
+                    stepRow("Enfoque", value: $draft.focusMinutes, range: 5...90, step: 5, unit: "min")
+                    stepRow("Descanso corto", value: $draft.shortBreakMinutes, range: 1...30, step: 1, unit: "min")
+                    stepRow("Descanso largo", value: $draft.longBreakMinutes, range: 5...60, step: 5, unit: "min")
+                    stepRow("Ciclos hasta descanso largo", value: $draft.cyclesUntilLongBreak, range: 2...8, step: 1, unit: "")
                 }
-                Section("Ciclos") {
-                    Stepper("Ciclos hasta descanso largo: \(draft.cyclesUntilLongBreak)", value: $draft.cyclesUntilLongBreak, in: 2...8)
-                }
+                .padding(20)
             }
+            .background(Color.zBackground)
+            .scrollContentBackground(.hidden)
             .navigationTitle("Pomodoro")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancelar") { dismiss() }
-                }
+                ToolbarItem(placement: .topBarLeading) { Button("Cancelar") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Guardar") {
                         PomodoroService.shared.updateSettings(draft)
@@ -386,5 +385,31 @@ struct PomodoroSettingsView: View {
                 }
             }
         }
+    }
+
+    private func stepRow(_ label: String, value: Binding<Int>, range: ClosedRange<Int>, step: Int, unit: String) -> some View {
+        HStack {
+            Text(label).font(.subheadline.weight(.medium)).foregroundStyle(.zForeground)
+            Spacer()
+            HStack(spacing: 12) {
+                Button {
+                    value.wrappedValue = max(range.lowerBound, value.wrappedValue - step)
+                } label: {
+                    Image(systemName: "minus").font(.subheadline.weight(.bold)).foregroundStyle(.zForeground)
+                        .frame(width: 32, height: 32).background(Color.zBackground, in: .circle)
+                }.buttonStyle(.plain)
+                Text("\(value.wrappedValue) \(unit)")
+                    .font(.subheadline.weight(.bold).monospacedDigit())
+                    .frame(width: 64)
+                Button {
+                    value.wrappedValue = min(range.upperBound, value.wrappedValue + step)
+                } label: {
+                    Image(systemName: "plus").font(.subheadline.weight(.bold)).foregroundStyle(.zForeground)
+                        .frame(width: 32, height: 32).background(Color.zBackground, in: .circle)
+                }.buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .background(Color.zSecondaryBG.opacity(0.5), in: .rect(cornerRadius: 12))
     }
 }

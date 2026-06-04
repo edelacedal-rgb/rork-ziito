@@ -1,90 +1,55 @@
 import SwiftUI
 import SwiftData
 
+let zPresetColors: [(name: String, hex: String)] = [
+    ("Rojo", "FF3B30"), ("Naranja", "FF9500"), ("Amarillo", "FFCC00"),
+    ("Verde", "34C759"), ("Verde Azulado", "5AC8FA"), ("Azul", "007AFF"),
+    ("Índigo", "5856D6"), ("Morado", "AF52DE"), ("Rosa", "FF2D55"),
+    ("Café", "A2845E"), ("Gris", "8E8E93"), ("Coral", "FF6B6B")
+]
+
 struct SubjectsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     @Query(sort: \Subject.name) private var subjects: [Subject]
-    @State private var showingAddSheet = false
-
-    let presetColors: [(name: String, hex: String)] = [
-        ("Rojo", "FF3B30"), ("Naranja", "FF9500"), ("Amarillo", "FFCC00"),
-        ("Verde", "34C759"), ("Verde Azulado", "5AC8FA"), ("Azul", "007AFF"),
-        ("Índigo", "5856D6"), ("Morado", "AF52DE"), ("Rosa", "FF2D55"),
-        ("Café", "A2845E"), ("Gris", "8E8E93"), ("Coral", "FF6B6B")
-    ]
+    @State private var showingAdd = false
 
     var body: some View {
-        NavigationStack {
-            List {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                ZScreenHeader(title: "Materias", onBack: { dismiss() }, onAdd: { showingAdd = true })
+
                 if subjects.isEmpty {
-                    Section {
-                        VStack(spacing: 12) {
-                            Image(systemName: "books.vertical")
-                                .font(.system(size: 48))
-                                .foregroundStyle(.zPrimary.opacity(0.5))
-
-                            Text("Sin materias")
-                                .font(.headline)
-                                .foregroundStyle(.secondary)
-
-                            Text("Agrega tus materias para empezar a planificar")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 40)
-                        .listRowBackground(Color.clear)
-                    }
+                    ZEmptyState(icon: "books.vertical", title: "Sin materias",
+                                desc: "Agrega tus materias para empezar a planificar")
                 } else {
-                    Section {
-                        ForEach(subjects) { subject in
-                            SubjectRow(subject: subject)
+                    VStack(spacing: 0) {
+                        ForEach(Array(subjects.enumerated()), id: \.element.id) { idx, s in
+                            HStack(spacing: 12) {
+                                Circle().fill(s.color).frame(width: 14, height: 14)
+                                Text(s.name).font(.body.weight(.medium)).foregroundStyle(.zForeground)
+                                Spacer()
+                                Button {
+                                    Haptics.tap(.light)
+                                    modelContext.delete(s); try? modelContext.save()
+                                } label: {
+                                    Image(systemName: "trash").font(.subheadline).foregroundStyle(.zMuted.opacity(0.6))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 14)
+                            if idx < subjects.count - 1 { Divider().background(Color.zBorder) }
                         }
-                        .onDelete(perform: deleteSubjects)
                     }
+                    .zCard()
                 }
             }
-            .listStyle(.insetGrouped)
-            .navigationTitle("Materias")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: { showingAddSheet = true }) {
-                        Image(systemName: "plus")
-                            .foregroundStyle(.zPrimary)
-                    }
-                }
-            }
-            .sheet(isPresented: $showingAddSheet) {
-                AddSubjectView(presetColors: presetColors)
-            }
+            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 100)
         }
-    }
-
-    private func deleteSubjects(offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(subjects[index])
-        }
-        try? modelContext.save()
-    }
-}
-
-struct SubjectRow: View {
-    let subject: Subject
-
-    var body: some View {
-        HStack(spacing: 14) {
-            Circle()
-                .fill(subject.color)
-                .frame(width: 14, height: 14)
-
-            Text(subject.name)
-                .font(.body)
-                .foregroundStyle(.primary)
-
-            Spacer()
-        }
-        .padding(.vertical, 4)
+        .background(Color.zBackground)
+        .scrollContentBackground(.hidden)
+        .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showingAdd) { AddSubjectView(presetColors: zPresetColors) }
     }
 }
 
@@ -93,78 +58,64 @@ struct AddSubjectView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
-    @State private var name: String = ""
-    @State private var selectedHex: String = "007AFF"
+    @State private var name = ""
+    @State private var selectedHex = "007AFF"
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Nombre") {
+            ScrollView {
+                VStack(spacing: 16) {
                     TextField("Nombre de la materia", text: $name)
-                }
-
-                Section("Color") {
+                        .textFieldStyle(.roundedBorder)
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
-                        ForEach(presetColors, id: \.hex) { color in
-                            ColorOption(
-                                hex: color.hex,
-                                name: color.name,
-                                isSelected: selectedHex == color.hex
-                            )
-                            .onTapGesture {
-                                selectedHex = color.hex
+                        ForEach(presetColors, id: \.hex) { c in
+                            VStack(spacing: 6) {
+                                Circle()
+                                    .fill(Color(hex: c.hex) ?? .blue)
+                                    .frame(width: 44, height: 44)
+                                    .overlay(Circle().stroke(selectedHex == c.hex ? Color.zForeground : .clear, lineWidth: 3).padding(-3))
+                                Text(c.name).font(.system(size: 10)).foregroundStyle(.zMuted).lineLimit(1)
                             }
+                            .onTapGesture { selectedHex = c.hex }
                         }
                     }
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 4)
                 }
+                .padding(20)
             }
+            .background(Color.zBackground)
+            .scrollContentBackground(.hidden)
             .navigationTitle("Nueva Materia")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { dismiss() }
-                }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Guardar") {
-                        addSubject()
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button("Guardar") { add() }.disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
         }
     }
 
-    private func addSubject() {
+    private func add() {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-
-        let subject = Subject(name: trimmed, colorHex: selectedHex)
-        modelContext.insert(subject)
+        modelContext.insert(Subject(name: trimmed, colorHex: selectedHex))
         try? modelContext.save()
         dismiss()
     }
 }
 
-struct ColorOption: View {
-    let hex: String
-    let name: String
-    let isSelected: Bool
-
+/// Shared empty-state block matching the web `Empty`.
+struct ZEmptyState: View {
+    let icon: String
+    let title: String
+    let desc: String
     var body: some View {
-        VStack(spacing: 6) {
-            Circle()
-                .fill(Color(hex: hex) ?? .blue)
-                .frame(width: 44, height: 44)
-                .overlay(
-                    Circle()
-                        .stroke(isSelected ? Color.primary : Color.clear, lineWidth: 3)
-                )
-
-            Text(name)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+        VStack(spacing: 12) {
+            Image(systemName: icon).font(.system(size: 48)).foregroundStyle(.zPrimary.opacity(0.4))
+            Text(title).font(.headline).foregroundStyle(.zMuted)
+            Text(desc).font(.subheadline).foregroundStyle(.zMuted).multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity).padding(.vertical, 60)
     }
 }

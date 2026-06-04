@@ -3,334 +3,157 @@ import SwiftData
 
 struct CalendarView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     @State private var viewModel = PlannerViewModel()
     @Query private var subjects: [Subject]
     @Query(sort: \Exam.date) private var exams: [Exam]
+    @Query(sort: \StudyTask.dueDate) private var tasks: [StudyTask]
 
-    @State private var currentMonth: Date = Date()
-    @State private var selectedDay: Date? = nil
+    @State private var cursor = Calendar.current.startOfDay(for: Date())
+    @State private var selected = Calendar.current.startOfDay(for: Date())
 
     private let calendar = Calendar.current
-    private let weekdaySymbols = Calendar.current.shortWeekdaySymbols
+    private let dow = ["L", "M", "X", "J", "V", "S", "D"]
+    private let months = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                          "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+
+    private func subjectOf(_ id: UUID?) -> Subject? { subjects.first { $0.id == id } }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    monthHeader
-                    weekdayHeader
-                    daysGrid
-
-                    if let selected = selectedDay {
-                        dayDetailSection(date: selected)
-                    }
-
-                    legendSection
-                }
-                .padding(.horizontal)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                ZScreenHeader(title: "Calendario", onBack: { dismiss() })
+                monthCard
+                dayDetail
             }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("Calendario")
-            .onAppear {
-                viewModel.loadSessions(modelContext: modelContext)
-            }
+            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 100)
         }
+        .background(Color.zBackground)
+        .scrollContentBackground(.hidden)
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear { viewModel.loadSessions(modelContext: modelContext) }
     }
 
-    private var monthHeader: some View {
-        HStack {
-            Button(action: previousMonth) {
-                Image(systemName: "chevron.left")
-                    .font(.title3)
-                    .foregroundStyle(.zPrimary)
-            }
-
-            Spacer()
-
-            Text(monthYearString)
-                .font(.title3)
-                .fontWeight(.bold)
-                .foregroundStyle(.primary)
-
-            Spacer()
-
-            Button(action: nextMonth) {
-                Image(systemName: "chevron.right")
-                    .font(.title3)
-                    .foregroundStyle(.zPrimary)
-            }
-        }
-        .padding(.vertical, 8)
-    }
-
-    private var weekdayHeader: some View {
-        HStack {
-            ForEach(weekdaySymbols, id: \.self) { day in
-                Text(day.prefix(1).uppercased())
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-            }
-        }
-    }
-
-    private var daysGrid: some View {
-        let days = daysInMonth()
-        return LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
-            ForEach(days, id: \.self) { date in
-                if let date = date {
-                    DayCell(
-                        date: date,
-                        isSelected: calendar.isDate(date, inSameDayAs: selectedDay ?? Date.distantPast),
-                        isToday: calendar.isDateInToday(date),
-                        sessions: viewModel.sessionsFor(date: date),
-                        hasExam: exams.contains(where: { calendar.isDate($0.date, inSameDayAs: date) })
-                    )
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.3)) {
-                            selectedDay = date
-                        }
-                    }
-                } else {
-                    Color.clear
-                        .frame(height: 44)
-                }
-            }
-        }
-    }
-
-    private func dayDetailSection(date: Date) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private var monthCard: some View {
+        VStack(spacing: 12) {
             HStack {
-                Text(dayDetailTitle(date: date))
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-
+                Button { changeMonth(-1) } label: {
+                    Image(systemName: "chevron.left").font(.headline).foregroundStyle(.zForeground).frame(width: 32, height: 32)
+                }.buttonStyle(.plain)
                 Spacer()
+                Text("\(months[calendar.component(.month, from: cursor) - 1]) \(calendar.component(.year, from: cursor))")
+                    .font(.headline).foregroundStyle(.zForeground)
+                Spacer()
+                Button { changeMonth(1) } label: {
+                    Image(systemName: "chevron.right").font(.headline).foregroundStyle(.zForeground).frame(width: 32, height: 32)
+                }.buttonStyle(.plain)
+            }
 
-                if calendar.isDateInToday(date) {
-                    Text("Hoy")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.zPrimary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.zPrimary.opacity(0.12))
-                        .clipShape(.capsule)
+            HStack {
+                ForEach(dow, id: \.self) { d in
+                    Text(d).font(.system(size: 11, weight: .semibold)).foregroundStyle(.zMuted).frame(maxWidth: .infinity)
                 }
             }
 
-            let sessions = viewModel.sessionsFor(date: date)
-            if sessions.isEmpty {
-                Text("Sin sesiones de estudio")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 20)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
+                ForEach(Array(days().enumerated()), id: \.offset) { _, day in
+                    if let day { dayCell(day) } else { Color.clear.frame(height: 40) }
+                }
+            }
+        }
+        .padding(16)
+        .zCard()
+    }
+
+    private func dayCell(_ day: Date) -> some View {
+        let isToday = calendar.isDateInToday(day)
+        let isSel = calendar.isDate(day, inSameDayAs: selected)
+        let dots = dotsFor(day)
+        return Button {
+            withAnimation(.spring(response: 0.3)) { selected = calendar.startOfDay(for: day) }
+        } label: {
+            VStack(spacing: 2) {
+                Text("\(calendar.component(.day, from: day))")
+                    .font(.system(size: 14, weight: isToday ? .bold : .regular))
+                    .foregroundStyle(isSel ? .white : (isToday ? Color.zPrimary : Color.zForeground))
+                HStack(spacing: 2) {
+                    ForEach(Array(dots.enumerated()), id: \.offset) { _, c in
+                        Circle().fill(isSel ? .white : c).frame(width: 4, height: 4)
+                    }
+                }
+                .frame(height: 5)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 40)
+            .background(isSel ? Color.zPrimary : (isToday ? Color.zSecondaryBG : .clear), in: .rect(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var dayDetail: some View {
+        let dayExams = exams.filter { calendar.isDate($0.date, inSameDayAs: selected) }
+        let dayTasks = tasks.filter { calendar.isDate($0.dueDate, inSameDayAs: selected) }
+        let daySessions = viewModel.sessionsFor(date: selected)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(selectedTitle).font(.headline).foregroundStyle(.zForeground)
+            if dayExams.isEmpty && dayTasks.isEmpty && daySessions.isEmpty {
+                Text("Nada programado este día").font(.subheadline).foregroundStyle(.zMuted)
+                    .frame(maxWidth: .infinity).padding(.vertical, 24)
             } else {
                 VStack(spacing: 8) {
-                    ForEach(sessions) { session in
-                        if let exam = exams.first(where: { $0.id == session.examID }),
-                           let subject = subjects.first(where: { $0.id == session.subjectID }) {
-                            HStack(spacing: 12) {
-                                Circle()
-                                    .fill(subject.color)
-                                    .frame(width: 10, height: 10)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(exam.title)
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-
-                                    Text("\(subject.name) · \(session.durationMinutes) min")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                Spacer()
-
-                                if session.isCompleted {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.green)
-                                        .font(.caption)
-                                }
-                            }
-                            .padding()
-                            .background {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color(.secondarySystemGroupedBackground))
-                            }
-                        }
-                    }
-                }
-            }
-
-            let dayExams = exams.filter { calendar.isDate($0.date, inSameDayAs: date) }
-            if !dayExams.isEmpty {
-                Text("Evaluaciones")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
-                    .padding(.top, 8)
-
-                ForEach(dayExams) { exam in
-                    if let subject = subjects.first(where: { $0.id == exam.subjectID }) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "pencil.circle.fill")
-                                .font(.title3)
-                                .foregroundStyle(subject.color)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(exam.title)
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-
-                                Text(subject.name)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
-
-                            PriorityBadge(priority: exam.priority)
-                        }
-                        .padding()
-                        .background {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(.secondarySystemGroupedBackground))
-                        }
+                    ForEach(dayExams) { e in detailRow(e.title, "Evaluación", subjectOf(e.subjectID)?.color ?? .zPrimary) }
+                    ForEach(dayTasks) { t in detailRow(t.title, "Tarea", subjectOf(t.subjectID)?.color ?? .zPrimary) }
+                    ForEach(daySessions) { s in
+                        let exam = exams.first { $0.id == s.examID }
+                        detailRow(exam?.title ?? "Sesión de estudio", "\(s.durationMinutes) min", subjectOf(s.subjectID)?.color ?? .zPrimary)
                     }
                 }
             }
         }
-        .padding()
-        .background {
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color(.systemGroupedBackground))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.zPrimary.opacity(0.15), lineWidth: 1)
-                )
+    }
+
+    private func detailRow(_ label: String, _ tag: String, _ color: Color) -> some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 3).fill(color).frame(width: 4, height: 32)
+            Text(label).font(.subheadline.weight(.medium)).foregroundStyle(.zForeground)
+            Spacer()
+            Text(tag).font(.caption).foregroundStyle(.zMuted)
         }
+        .padding(14)
+        .zCard(radius: 12)
     }
 
-    private var legendSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Leyenda")
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
+    private var selectedTitle: String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "es_ES")
+        f.dateFormat = "EEEE, d 'de' MMMM"
+        return f.string(from: selected).capitalized
+    }
 
-            HStack(spacing: 16) {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color.zPrimary)
-                        .frame(width: 8, height: 8)
-                    Text("Sesión")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+    private func dotsFor(_ d: Date) -> [Color] {
+        var ids = Set<UUID>()
+        exams.forEach { if calendar.isDate($0.date, inSameDayAs: d) { ids.insert($0.subjectID) } }
+        tasks.forEach { if calendar.isDate($0.dueDate, inSameDayAs: d), let s = $0.subjectID { ids.insert(s) } }
+        viewModel.sessionsFor(date: d).forEach { ids.insert($0.subjectID) }
+        return ids.prefix(4).compactMap { id in subjectOf(id)?.color }
+    }
 
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 8, height: 8)
-                    Text("Evaluación")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
+    private func days() -> [Date?] {
+        let year = calendar.component(.year, from: cursor)
+        let month = calendar.component(.month, from: cursor)
+        guard let first = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
+              let range = calendar.range(of: .day, in: .month, for: first) else { return [] }
+        let startOffset = (calendar.component(.weekday, from: first) + 5) % 7 // Monday-first
+        var cells: [Date?] = Array(repeating: nil, count: startOffset)
+        for d in range {
+            cells.append(calendar.date(from: DateComponents(year: year, month: month, day: d)))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        return cells
     }
 
-    private func dayDetailTitle(date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "es_ES")
-        formatter.dateFormat = "EEEE d"
-        return formatter.string(from: date).capitalized
-    }
-
-    private func daysInMonth() -> [Date?] {
-        guard let monthInterval = calendar.dateInterval(of: .month, for: currentMonth) else { return [] }
-        let firstWeekday = calendar.component(.weekday, from: monthInterval.start)
-        let offset = (firstWeekday - calendar.firstWeekday + 7) % 7
-
-        var days: [Date?] = Array(repeating: nil, count: offset)
-
-        var current = monthInterval.start
-        while current < monthInterval.end {
-            days.append(current)
-            current = calendar.date(byAdding: .day, value: 1, to: current)!
-        }
-
-        while days.count % 7 != 0 {
-            days.append(nil)
-        }
-
-        return days
-    }
-
-    private var monthYearString: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "es_ES")
-        formatter.dateFormat = "MMMM yyyy"
-        return formatter.string(from: currentMonth).capitalized
-    }
-
-    private func previousMonth() {
+    private func changeMonth(_ delta: Int) {
         withAnimation(.easeInOut(duration: 0.2)) {
-            currentMonth = calendar.date(byAdding: .month, value: -1, to: currentMonth)!
+            cursor = calendar.date(byAdding: .month, value: delta, to: cursor) ?? cursor
         }
-    }
-
-    private func nextMonth() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            currentMonth = calendar.date(byAdding: .month, value: 1, to: currentMonth)!
-        }
-    }
-}
-
-struct DayCell: View {
-    let date: Date
-    let isSelected: Bool
-    let isToday: Bool
-    let sessions: [StudySession]
-    let hasExam: Bool
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Text("\(Calendar.current.component(.day, from: date))")
-                .font(.subheadline)
-                .fontWeight(isToday ? .bold : .regular)
-                .foregroundStyle(isToday ? .white : .primary)
-                .frame(width: 32, height: 32)
-                .background {
-                    if isToday {
-                        Circle()
-                            .fill(Color.zPrimary)
-                    } else if isSelected {
-                        Circle()
-                            .fill(Color.zPrimary.opacity(0.2))
-                    }
-                }
-
-            HStack(spacing: 2) {
-                if !sessions.isEmpty {
-                    Circle()
-                        .fill(Color.zPrimary)
-                        .frame(width: 5, height: 5)
-                }
-                if hasExam {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 5, height: 5)
-                }
-            }
-            .frame(height: 6)
-        }
-        .frame(height: 50)
-        .contentShape(.rect)
     }
 }
