@@ -11,9 +11,9 @@ export function ActiveFocusBar() {
     <div className="pointer-events-none px-4 pb-2">
       <button
         onClick={openFocus}
-        className="pointer-events-auto mx-auto flex w-full max-w-lg items-center gap-3 rounded-full bg-primary px-4 py-3 text-primary-foreground shadow-lg shadow-primary/30 transition active:scale-[0.98]"
+        className="pointer-events-auto mx-auto flex w-full max-w-lg items-center gap-3 rounded-xl bg-primary px-4 py-3 text-primary-foreground transition active:scale-[0.98]"
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/20">
           {pomodoro.phase === "focus" ? (
             <Mountain className="h-4 w-4" />
           ) : (
@@ -21,10 +21,10 @@ export function ActiveFocusBar() {
           )}
         </span>
         <span className="flex flex-col items-start leading-tight">
-          <span className="text-[11px] font-semibold opacity-80">{PHASE_LABEL[pomodoro.phase]}</span>
+          <span className="text-[11px] font-medium opacity-75">{PHASE_LABEL[pomodoro.phase]}</span>
           <span className="text-base font-bold tabular-nums">{formattedRemaining}</span>
         </span>
-        <ChevronUp className="ml-auto h-5 w-5 opacity-70" />
+        <ChevronUp className="ml-auto h-5 w-5 opacity-60" />
       </button>
     </div>
   );

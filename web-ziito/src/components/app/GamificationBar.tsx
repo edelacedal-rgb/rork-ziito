@@ -31,10 +31,12 @@ export function GamificationBar() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex w-full items-center justify-around gap-2 rounded-full border border-border bg-card/80 px-4 py-2.5 shadow-sm backdrop-blur transition active:scale-[0.98]"
+        className="flex w-full items-center justify-around rounded-xl border border-border bg-card px-4 py-2.5 transition active:bg-secondary"
       >
-        <Stat icon={Flame} value={game.streak} tint={streakActive ? "text-accent" : "text-muted-foreground"} glow={streakActive} />
+        <Stat icon={Flame} value={game.streak} tint={streakActive ? "text-accent" : "text-muted-foreground"} />
+        <div className="h-4 w-px bg-border" />
         <Stat icon={Heart} value={game.hearts} tint="text-rose-500" />
+        <div className="h-4 w-px bg-border" />
         <Stat icon={Bolt} value={game.xp} tint="text-yellow-500" />
       </button>
       <RewardsDialog open={open} onOpenChange={setOpen} streakActive={streakActive} />
@@ -46,17 +48,15 @@ function Stat({
   icon: Icon,
   value,
   tint,
-  glow,
 }: {
   icon: typeof Flame;
   value: number;
   tint: string;
-  glow?: boolean;
 }) {
   return (
     <span className="flex flex-1 items-center justify-center gap-1.5">
-      <Icon className={cn("h-4 w-4 fill-current", tint, glow && "animate-pulse drop-shadow-[0_0_6px_currentColor]")} />
-      <span className="text-sm font-extrabold tabular-nums text-foreground">{value}</span>
+      <Icon className={cn("h-4 w-4", tint)} />
+      <span className="text-sm font-bold tabular-nums">{value}</span>
     </span>
   );
 }
@@ -93,16 +93,16 @@ function RewardsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto rounded-3xl">
+      <DialogContent className="max-h-[85vh] overflow-y-auto rounded-2xl">
         <DialogHeader>
           <DialogTitle>Tu progreso</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           {/* Level */}
-          <div className="rounded-2xl border bg-secondary/40 p-4">
+          <div className="rounded-xl border bg-secondary/40 p-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-accent/20 text-lg font-extrabold text-accent-foreground">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/20 text-base font-bold text-accent-foreground">
                 {level}
               </div>
               <div>
@@ -110,7 +110,7 @@ function RewardsDialog({
                 <p className="text-xs text-muted-foreground">{game.xp} XP totales</p>
               </div>
             </div>
-            <Progress value={levelProgress} className="mt-3 h-2" />
+            <Progress value={levelProgress} className="mt-3 h-1.5" />
             <p className="mt-1.5 text-xs text-muted-foreground">
               {xpInLevel}/500 XP para el nivel {level + 1}
             </p>
@@ -118,7 +118,7 @@ function RewardsDialog({
 
           <div className="grid grid-cols-2 gap-3">
             {/* Hearts */}
-            <div className="rounded-2xl border bg-secondary/40 p-4 text-center">
+            <div className="rounded-xl border bg-secondary/40 p-4 text-center">
               <div className="flex justify-center gap-1">
                 {Array.from({ length: MAX_HEARTS }, (_, i) => (
                   <Heart
@@ -137,7 +137,7 @@ function RewardsDialog({
             </div>
 
             {/* Streak */}
-            <div className="rounded-2xl border bg-secondary/40 p-4 text-center">
+            <div className="rounded-xl border bg-secondary/40 p-4 text-center">
               <Flame className={cn("mx-auto h-6 w-6", streakActive ? "fill-accent text-accent" : "text-muted-foreground")} />
               <p className="mt-1 text-lg font-bold tabular-nums">{game.streak} días</p>
               <p className="text-[11px] text-muted-foreground">Racha · récord {game.longestStreak}</p>
@@ -145,12 +145,12 @@ function RewardsDialog({
           </div>
 
           {/* Shop */}
-          <div className="rounded-2xl border bg-secondary/40 p-4">
+          <div className="rounded-xl border bg-secondary/40 p-4">
             <p className="mb-3 flex items-center gap-2 font-semibold">
               <Snowflake className="h-4 w-4 text-cyan-500" /> Tienda offline
             </p>
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-cyan-500/15">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-500/15">
                 <Snowflake className="h-5 w-5 text-cyan-500" />
               </div>
               <div className="flex-1">
@@ -163,7 +163,7 @@ function RewardsDialog({
                 onClick={buyFreeze}
                 disabled={!canBuyFreeze}
                 className={cn(
-                  "rounded-full px-3 py-2 text-xs font-bold text-white transition",
+                  "rounded-lg px-3 py-2 text-xs font-bold text-white transition",
                   canBuyFreeze ? "bg-accent active:scale-95" : "bg-muted-foreground/40",
                 )}
               >
@@ -173,14 +173,14 @@ function RewardsDialog({
           </div>
 
           {/* Heatmap */}
-          <div className="rounded-2xl border bg-secondary/40 p-4">
+          <div className="rounded-xl border bg-secondary/40 p-4">
             <p className="mb-3 font-semibold">Constancia</p>
             <div className="grid grid-cols-[repeat(17,minmax(0,1fr))] gap-1">
               {cells.map((active, i) => (
                 <div
                   key={i}
                   className={cn(
-                    "aspect-square rounded-[2px]",
+                    "aspect-square rounded-sm",
                     active ? "bg-primary" : "bg-muted-foreground/15",
                   )}
                 />
