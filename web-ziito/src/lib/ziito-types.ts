@@ -22,6 +22,32 @@ export const PRIORITY_META: Record<
 
 export const PRIORITY_LEVELS: PriorityLevel[] = [1, 2, 3, 4, 5];
 
+/** Workload weight of an individual sub-topic / module within an exam. */
+export type ContentDensity = "low" | "medium" | "high";
+
+export const DENSITY_LEVELS: ContentDensity[] = ["low", "medium", "high"];
+
+export const DENSITY_META: Record<
+  ContentDensity,
+  { points: number; label: string; short: string; colorHex: string }
+> = {
+  low: { points: 1, label: "Carga baja", short: "Baja", colorHex: "34C759" },
+  medium: { points: 2, label: "Carga media", short: "Media", colorHex: "FF9500" },
+  high: { points: 3, label: "Carga alta", short: "Alta", colorHex: "FF3B30" },
+};
+
+/** Points a density tier contributes to the Slope Index. */
+export function densityPoints(d: ContentDensity): number {
+  return DENSITY_META[d].points;
+}
+
+/** A specific module/topic a student must master for an evaluation. */
+export interface SubTopic {
+  id: string;
+  title: string;
+  density: ContentDensity;
+}
+
 export interface Exam {
   id: string;
   title: string;
@@ -30,6 +56,23 @@ export interface Exam {
   subjectID: string;
   createdAt: number;
   isCompleted: boolean;
+  subTopics: SubTopic[];
+}
+
+/** Sum of density points across all sub-topics of an exam. */
+export function totalDensityPoints(exam: Exam): number {
+  return (exam.subTopics ?? []).reduce((sum, t) => sum + densityPoints(t.density), 0);
+}
+
+/**
+ * The "Slope Index" — local difficulty model:
+ * `DifficultyScore = TotalDensityPoints / DaysUntilExam`.
+ * Higher score => steeper climb => more focus nodes required before the peak.
+ */
+export function slopeIndex(exam: Exam, daysUntilExam: number): number {
+  const points = totalDensityPoints(exam);
+  if (points <= 0) return 0;
+  return points / Math.max(daysUntilExam, 1);
 }
 
 export interface StudyTask {

@@ -50,8 +50,11 @@ struct PersistedFocusState: Codable {
     var isPaused: Bool
     var pausedRemaining: TimeInterval
     var modeRaw: String
+    var examID: UUID?
+    var subtopicQueue: [SubTopic]?
+    var subtopicIndex: Int?
 
-    static let key = "pomodoro.state.v1"
+    static let key = "pomodoro.state.v2"
 }
 
 @Observable
@@ -71,6 +74,16 @@ final class PomodoroService {
     var pausedRemaining: TimeInterval = 0
     var mode: FocusMode = .pomodoro
     var now: Date = Date()
+    // Smart Session Interleaving
+    var examID: UUID?
+    var subtopicQueue: [SubTopic] = []
+    var subtopicIndex: Int = 0
+
+    /// The module the current focus block is targeting (nil when no sub-topics).
+    var currentSubtopic: SubTopic? {
+        guard !subtopicQueue.isEmpty else { return nil }
+        return subtopicQueue[subtopicIndex % subtopicQueue.count]
+    }
     /// Fired exactly when a focus phase organically reaches 00:00 (not on manual skip / stop).
     /// Used by Fog Mode + Path to plant a flag automatically and reward the user.
     var onFocusCompleted: ((_ subjectID: UUID?) -> Void)?
@@ -129,9 +142,12 @@ final class PomodoroService {
 
     // MARK: - Lifecycle
 
-    func start(mode: FocusMode = .pomodoro, subjectID: UUID? = nil) {
+    func start(mode: FocusMode = .pomodoro, subjectID: UUID? = nil, subTopics: [SubTopic] = [], examID: UUID? = nil) {
         self.mode = mode
         self.subjectID = subjectID
+        self.examID = examID
+        self.subtopicQueue = SubtopicScheduler.buildQueue(subTopics)
+        self.subtopicIndex = 0
         self.completedFocusCycles = 0
         self.sessionStart = Date()
         self.phase = .focus
@@ -244,6 +260,9 @@ final class PomodoroService {
         case .shortBreak, .longBreak:
             phase = .focus
             phaseDurationMinutes = settings.focusMinutes
+            // Entering a fresh focus block: advance the interleaved sub-topic
+            // queue so each Micro-Ziito targets a new module.
+            if !subtopicQueue.isEmpty { subtopicIndex += 1 }
         }
         phaseStart = Date()
         isPaused = false
@@ -323,7 +342,10 @@ final class PomodoroService {
             subjectID: subjectID,
             isPaused: isPaused,
             pausedRemaining: pausedRemaining,
-            modeRaw: mode.rawValue
+            modeRaw: mode.rawValue,
+            examID: examID,
+            subtopicQueue: subtopicQueue,
+            subtopicIndex: subtopicIndex
         )
         if let data = try? JSONEncoder().encode(s) {
             UserDefaults.standard.set(data, forKey: PersistedFocusState.key)
@@ -342,6 +364,9 @@ final class PomodoroService {
         isPaused = s.isPaused
         pausedRemaining = s.pausedRemaining
         mode = FocusMode(rawValue: s.modeRaw) ?? .pomodoro
+        examID = s.examID
+        subtopicQueue = s.subtopicQueue ?? []
+        subtopicIndex = s.subtopicIndex ?? 0
         isRunning = true
         startTimer()
     }

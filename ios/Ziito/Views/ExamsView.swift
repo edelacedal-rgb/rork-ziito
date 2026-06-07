@@ -101,6 +101,7 @@ struct AddExamView: View {
     @State private var date = Calendar.current.date(byAdding: .day, value: 7, to: Date())!
     @State private var subjectID: UUID?
     @State private var priority: PriorityLevel = .medium
+    @State private var subTopics: [SubTopic] = []
 
     private var canSave: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty && subjectID != nil }
 
@@ -112,6 +113,7 @@ struct AddExamView: View {
                     DatePicker("Fecha", selection: $date, displayedComponents: .date)
                     SubjectPicker(subjects: subjects, value: $subjectID, allowNone: false)
                     PriorityPicker(value: $priority)
+                    SubTopicEditor(subTopics: $subTopics, date: date)
                 }
                 .padding(20)
             }
@@ -130,9 +132,99 @@ struct AddExamView: View {
         guard let subjectID else { return }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        modelContext.insert(Exam(title: trimmed, date: date, priority: priority, subjectID: subjectID))
+        modelContext.insert(Exam(title: trimmed, date: date, priority: priority, subjectID: subjectID, subTopics: subTopics))
         try? modelContext.save()
         dismiss()
+    }
+}
+
+/// Dynamic sub-topic list editor with a ContentDensity tier picker.
+struct SubTopicEditor: View {
+    @Binding var subTopics: [SubTopic]
+    let date: Date
+
+    @State private var draft = ""
+    @State private var density: ContentDensity = .medium
+
+    private var points: Int { subTopics.reduce(0) { $0 + $1.density.points } }
+    private var days: Int {
+        max(Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: Date()),
+                                            to: Calendar.current.startOfDay(for: date)).day ?? 1, 1)
+    }
+    private var slope: Double { points > 0 ? Double(points) / Double(days) : 0 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Temas / módulos", systemImage: "square.stack.3d.up")
+                .font(.caption.weight(.medium)).foregroundStyle(.zMuted)
+
+            if !subTopics.isEmpty {
+                VStack(spacing: 6) {
+                    ForEach(subTopics) { t in
+                        let c = Color(hex: t.density.colorName) ?? .gray
+                        HStack(spacing: 8) {
+                            Circle().fill(c).frame(width: 8, height: 8)
+                            Text(t.title).font(.subheadline.weight(.medium)).foregroundStyle(.zForeground).lineLimit(1)
+                            Spacer()
+                            Text(t.density.shortLabel)
+                                .font(.caption2.weight(.bold)).foregroundStyle(c)
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(c.opacity(0.15), in: .capsule)
+                            Button {
+                                subTopics.removeAll { $0.id == t.id }
+                            } label: {
+                                Image(systemName: "trash").font(.caption).foregroundStyle(.zMuted.opacity(0.6))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 9)
+                        .background(Color.zCardBG, in: .rect(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.zBorder, lineWidth: 1))
+                    }
+                }
+            }
+
+            HStack(spacing: 8) {
+                TextField("Ej: Matrices, Derivadas...", text: $draft)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(add)
+                Button(action: add) {
+                    Image(systemName: "plus")
+                        .font(.subheadline.weight(.bold)).foregroundStyle(.white)
+                        .frame(width: 38, height: 38)
+                        .background(draft.trimmingCharacters(in: .whitespaces).isEmpty ? Color.zMuted.opacity(0.4) : Color.zPrimary, in: .rect(cornerRadius: 9))
+                }
+                .buttonStyle(.plain)
+                .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+
+            HStack(spacing: 6) {
+                ForEach(ContentDensity.allCases) { d in
+                    let c = Color(hex: d.colorName) ?? .gray
+                    Button { density = d } label: {
+                        Text(d.shortLabel)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(density == d ? .white : Color.zMuted)
+                            .frame(maxWidth: .infinity).padding(.vertical, 8)
+                            .background(density == d ? c : Color.zSecondaryBG, in: .rect(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if !subTopics.isEmpty {
+                Text("Índice de pendiente: \(slope, specifier: "%.2f") (\(points) pts / \(days) d). A mayor pendiente, más bloques de enfoque antes del examen.")
+                    .font(.caption2).foregroundStyle(.zMuted)
+            }
+        }
+    }
+
+    private func add() {
+        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        subTopics.append(SubTopic(title: t, density: density))
+        draft = ""
+        density = .medium
     }
 }
 

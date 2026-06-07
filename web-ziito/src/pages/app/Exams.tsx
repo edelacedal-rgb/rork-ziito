@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ClipboardList, RotateCcw, Trash2 } from "lucide-react";
+import { Check, ClipboardList, Layers, Plus, RotateCcw, Trash2 } from "lucide-react";
 
 import {
   Dialog,
@@ -15,10 +15,14 @@ import { PriorityBadge } from "@/components/app/PriorityBadge";
 import { Header, Empty } from "@/pages/app/Subjects";
 import { useZiito } from "@/store/ZiitoStore";
 import {
+  DENSITY_LEVELS,
+  DENSITY_META,
   PRIORITY_LEVELS,
   PRIORITY_META,
+  type ContentDensity,
   type Exam,
   type PriorityLevel,
+  type SubTopic,
 } from "@/lib/ziito-types";
 import { daysUntil, formatShortDate } from "@/lib/ziito-date";
 import { colorVar } from "@/lib/ziito-color";
@@ -130,7 +134,13 @@ function ExamDialog({
   subjects,
 }: {
   onClose: () => void;
-  onSave: (input: { title: string; date: number; priority: PriorityLevel; subjectID: string }) => void;
+  onSave: (input: {
+    title: string;
+    date: number;
+    priority: PriorityLevel;
+    subjectID: string;
+    subTopics: SubTopic[];
+  }) => void;
   subjects: { id: string; name: string; colorHex: string }[];
 }) {
   const [title, setTitle] = useState("");
@@ -139,6 +149,7 @@ function ExamDialog({
   const [date, setDate] = useState(defaultDate.toISOString().slice(0, 10));
   const [subjectID, setSubjectID] = useState<string | null>(null);
   const [priority, setPriority] = useState<PriorityLevel>(3);
+  const [subTopics, setSubTopics] = useState<SubTopic[]>([]);
 
   const canSave = title.trim().length > 0 && subjectID != null;
 
@@ -153,6 +164,7 @@ function ExamDialog({
           <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           <SubjectPicker subjects={subjects} value={subjectID} onChange={setSubjectID} />
           <PriorityPicker value={priority} onChange={setPriority} />
+          <SubTopicEditor value={subTopics} onChange={setSubTopics} date={date} />
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
@@ -166,6 +178,7 @@ function ExamDialog({
                 date: new Date(`${date}T12:00:00`).getTime(),
                 priority,
                 subjectID: subjectID!,
+                subTopics,
               });
               onClose();
             }}
@@ -175,6 +188,114 @@ function ExamDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+const stUid = (): string => Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+function SubTopicEditor({
+  value,
+  onChange,
+  date,
+}: {
+  value: SubTopic[];
+  onChange: (t: SubTopic[]) => void;
+  date: string;
+}) {
+  const [draft, setDraft] = useState("");
+  const [density, setDensity] = useState<ContentDensity>("medium");
+
+  const add = () => {
+    const t = draft.trim();
+    if (!t) return;
+    onChange([...value, { id: stUid(), title: t, density }]);
+    setDraft("");
+    setDensity("medium");
+  };
+
+  const points = value.reduce((s, t) => s + DENSITY_META[t.density].points, 0);
+  const days = Math.max(
+    Math.round((new Date(`${date}T12:00:00`).getTime() - Date.now()) / 86_400_000),
+    1,
+  );
+  const slope = points > 0 ? points / days : 0;
+
+  return (
+    <div>
+      <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <Layers className="h-3.5 w-3.5" /> Temas / módulos
+      </label>
+
+      {value.length > 0 && (
+        <div className="mb-2 space-y-1.5">
+          {value.map((t) => (
+            <div key={t.id} className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2">
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: colorVar(DENSITY_META[t.density].colorHex) }}
+              />
+              <span className="flex-1 truncate text-sm font-medium">{t.title}</span>
+              <span
+                className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                style={{
+                  backgroundColor: `${colorVar(DENSITY_META[t.density].colorHex)}22`,
+                  color: colorVar(DENSITY_META[t.density].colorHex),
+                }}
+              >
+                {DENSITY_META[t.density].short}
+              </span>
+              <button
+                onClick={() => onChange(value.filter((x) => x.id !== t.id))}
+                className="text-muted-foreground/50 transition active:scale-90 hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <Input
+          placeholder="Ej: Matrices, Derivadas..."
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+        />
+        <Button type="button" size="icon" onClick={add} disabled={!draft.trim()} className="shrink-0">
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <div className="mt-2 grid grid-cols-3 gap-1.5">
+        {DENSITY_LEVELS.map((d) => (
+          <button
+            key={d}
+            type="button"
+            onClick={() => setDensity(d)}
+            className={cn(
+              "rounded-lg py-1.5 text-[11px] font-bold transition",
+              density === d ? "text-white" : "bg-secondary text-muted-foreground",
+            )}
+            style={density === d ? { backgroundColor: colorVar(DENSITY_META[d].colorHex) } : undefined}
+          >
+            {DENSITY_META[d].short}
+          </button>
+        ))}
+      </div>
+
+      {value.length > 0 && (
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Índice de pendiente: <span className="font-bold text-foreground">{slope.toFixed(2)}</span>{" "}
+          ({points} pts / {days} d). A mayor pendiente, más bloques de enfoque antes del examen.
+        </p>
+      )}
+    </div>
   );
 }
 

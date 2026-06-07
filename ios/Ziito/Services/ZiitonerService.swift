@@ -156,7 +156,12 @@ final class ZiitonerService {
         let priorityBonus = exam.priority.rawValue
         let urgencyBonus = min(Int(urgencyScore * 2), 6)
         let timeBonus = max(8 - days, 0)
-        return min(baseSessions + priorityBonus + urgencyBonus + timeBonus, 16)
+        // Slope Index: denser content over fewer days demands more focus nodes
+        // before the peak. Each declared sub-topic also guarantees a block floor.
+        let densityBonus = min(Int(ceil(exam.slopeIndex * 3.0)), 8)
+        let topicFloor = min(exam.totalDensityPoints, 12)
+        let computed = baseSessions + priorityBonus + urgencyBonus + timeBonus + densityBonus
+        return min(max(computed, topicFloor), 24)
     }
 
     private func distributeSessions(totalSessions: Int, over days: Int, urgencyScore: Double, daysUntil: Int) -> [Int] {

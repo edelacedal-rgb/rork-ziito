@@ -27,10 +27,12 @@ import {
   type StudySession,
   type StudyTask,
   type Subject,
+  type SubTopic,
   type Weekday,
 } from "@/lib/ziito-types";
 import { addMonths, isSameDay, startOfDay } from "@/lib/ziito-date";
 import { generateZiito } from "@/lib/ziitoner";
+import { buildSubtopicQueue, pickFocusExam } from "@/lib/subtopic-scheduler";
 
 const uid = (): string => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
@@ -100,6 +102,10 @@ export interface PomodoroRuntime {
   completedFocusCycles: number;
   subjectID: string | null;
   pausedRemaining: number; // seconds
+  // Smart Session Interleaving
+  examID: string | null;
+  subtopicQueue: SubTopic[];
+  subtopicIndex: number;
 }
 
 interface ZiitoContextValue {
@@ -118,7 +124,13 @@ interface ZiitoContextValue {
   deleteSubject: (id: string) => void;
 
   // exams
-  addExam: (input: { title: string; date: number; priority: PriorityLevel; subjectID: string }) => void;
+  addExam: (input: {
+    title: string;
+    date: number;
+    priority: PriorityLevel;
+    subjectID: string;
+    subTopics: SubTopic[];
+  }) => void;
   deleteExam: (id: string) => void;
   toggleExam: (id: string) => void;
 
@@ -152,7 +164,8 @@ interface ZiitoContextValue {
   remaining: number; // seconds
   progress: number;
   formattedRemaining: string;
-  startFocus: (mode?: FocusMode, subjectID?: string | null) => void;
+  startFocus: (mode?: FocusMode, subjectID?: string | null, subTopics?: SubTopic[], examID?: string | null) => void;
+  currentSubtopic: SubTopic | null;
   pauseFocus: () => void;
   resumeFocus: () => void;
   skipPhase: () => void;
@@ -196,6 +209,9 @@ export function ZiitoProvider({ children }: { children: ReactNode }) {
     completedFocusCycles: 0,
     subjectID: null,
     pausedRemaining: 0,
+    examID: null,
+    subtopicQueue: [],
+    subtopicIndex: 0,
   });
   const [now, setNow] = useState<number>(Date.now());
   const [focusVisible, setFocusVisible] = useState<boolean>(false);
@@ -337,7 +353,13 @@ export function ZiitoProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addExam = useCallback(
-    (input: { title: string; date: number; priority: PriorityLevel; subjectID: string }) => {
+    (input: {
+      title: string;
+      date: number;
+      priority: PriorityLevel;
+      subjectID: string;
+      subTopics: SubTopic[];
+    }) => {
       setExams((e) => [
         ...e,
         { id: uid(), ...input, createdAt: Date.now(), isCompleted: false },
@@ -431,7 +453,12 @@ export function ZiitoProvider({ children }: { children: ReactNode }) {
   }, [remaining]);
 
   const startFocus = useCallback(
-    (mode: FocusMode = "pomodoro", subjectID: string | null = null) => {
+    (
+      mode: FocusMode = "pomodoro",
+      subjectID: string | null = null,
+      subTopics: SubTopic[] = [],
+      examID: string | null = null,
+    ) => {
       const ts = Date.now();
       setPomodoro({
         isRunning: true,
@@ -444,11 +471,20 @@ export function ZiitoProvider({ children }: { children: ReactNode }) {
         completedFocusCycles: 0,
         subjectID,
         pausedRemaining: 0,
+        examID,
+        subtopicQueue: buildSubtopicQueue(subTopics),
+        subtopicIndex: 0,
       });
       setNow(ts);
     },
     [settings.focusMinutes],
   );
+
+  const currentSubtopic = useMemo<SubTopic | null>(() => {
+    const q = pomodoro.subtopicQueue;
+    if (q.length === 0) return null;
+    return q[pomodoro.subtopicIndex % q.length];
+  }, [pomodoro.subtopicQueue, pomodoro.subtopicIndex]);
 
   const pauseFocus = useCallback(() => {
     setPomodoro((p) => {
@@ -483,6 +519,12 @@ export function ZiitoProvider({ children }: { children: ReactNode }) {
         phase = "focus";
         phaseDurationMinutes = settings.focusMinutes;
       }
+      // Entering a fresh focus block: advance the interleaved sub-topic queue so
+      // each Micro-Ziito targets a new module per the rotation logic.
+      const subtopicIndex =
+        p.phase !== "focus" && p.subtopicQueue.length > 0
+          ? p.subtopicIndex + 1
+          : p.subtopicIndex;
       if (endingFocusOrganically) {
         registerStudyCompletion(1);
         if (p.subjectID) {
@@ -507,6 +549,7 @@ export function ZiitoProvider({ children }: { children: ReactNode }) {
         phase,
         phaseDurationMinutes,
         completedFocusCycles,
+        subtopicIndex,
         phaseStart: Date.now(),
         isPaused: false,
       };
@@ -582,10 +625,12 @@ export function ZiitoProvider({ children }: { children: ReactNode }) {
   }, [regenerateHearts]);
 
   const openFocus = useCallback(() => {
-    setPomodoro((p) => (p.isRunning ? p : p));
-    if (!pomodoro.isRunning) startFocus("pomodoro");
+    if (!pomodoro.isRunning) {
+      const exam = pickFocusExam(exams);
+      startFocus("pomodoro", exam?.subjectID ?? null, exam?.subTopics ?? [], exam?.id ?? null);
+    }
     setFocusVisible(true);
-  }, [pomodoro.isRunning, startFocus]);
+  }, [pomodoro.isRunning, startFocus, exams]);
 
   const minimizeFocus = useCallback(() => setFocusVisible(false), []);
 
@@ -619,6 +664,7 @@ export function ZiitoProvider({ children }: { children: ReactNode }) {
     progress,
     formattedRemaining,
     startFocus,
+    currentSubtopic,
     pauseFocus,
     resumeFocus,
     skipPhase,

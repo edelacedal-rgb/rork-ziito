@@ -12,6 +12,7 @@ struct FocusModeView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Query private var subjects: [Subject]
+    @Query private var exams: [Exam]
 
     var pomodoro = PomodoroService.shared
     /// Closes the cover WITHOUT stopping the timer (multitasking).
@@ -54,6 +55,10 @@ struct FocusModeView: View {
 
                 Spacer(minLength: 0)
 
+                if pomodoro.phase == .focus, let topic = pomodoro.currentSubtopic {
+                    subtopicCard(topic)
+                }
+
                 controls
 
                 if pomodoro.mode == .pomodoro {
@@ -78,7 +83,8 @@ struct FocusModeView: View {
         .statusBarHidden()
         .onAppear {
             if !pomodoro.isRunning {
-                pomodoro.start(mode: .pomodoro)
+                let exam = SubtopicScheduler.pickFocusExam(exams)
+                pomodoro.start(mode: .pomodoro, subjectID: exam?.subjectID, subTopics: exam?.subTopics ?? [], examID: exam?.id)
             }
             startAnimations()
             // Wire the automatic reward: only fires when the focus timer reaches 00:00.
@@ -290,6 +296,34 @@ struct FocusModeView: View {
                     .transition(.scale.combined(with: .opacity))
             }
         }
+    }
+
+    /// White HUD card linking the timer to the current content node.
+    private func subtopicCard(_ topic: SubTopic) -> some View {
+        let c = Color(hex: topic.density.colorName) ?? .zPrimary
+        return HStack(spacing: 12) {
+            ZStack {
+                Circle().fill(c).frame(width: 36, height: 36)
+                Text(String(topic.density.shortLabel.prefix(1)))
+                    .font(.subheadline.weight(.black)).foregroundStyle(.white)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text("ENFOQUE ACTIVO")
+                    .font(.system(size: 10, weight: .black)).tracking(0.6)
+                    .foregroundStyle(.black.opacity(0.5))
+                Text(topic.title)
+                    .font(.subheadline.weight(.bold)).foregroundStyle(.black).lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Text("Carga: \(topic.density.shortLabel)")
+                .font(.system(size: 10, weight: .black)).foregroundStyle(c)
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(c.opacity(0.15), in: .capsule)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(.white, in: .rect(cornerRadius: 18))
+        .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     private func controlButton(icon: String, large: Bool = false, action: @escaping () -> Void) -> some View {

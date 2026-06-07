@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { ChevronDown, Flag, Pause, Play, SkipForward, SlidersHorizontal, X } from "lucide-react";
 
 import { useZiito } from "@/store/ZiitoStore";
-import { PHASE_LABEL } from "@/lib/ziito-types";
+import { DENSITY_META, PHASE_LABEL } from "@/lib/ziito-types";
 import { PomodoroSettingsDialog } from "@/components/app/PomodoroSettingsDialog";
+import { colorVar } from "@/lib/ziito-color";
 import { cn } from "@/lib/utils";
 
 export function FocusMode() {
@@ -18,6 +19,7 @@ export function FocusMode() {
     stopFocus,
     minimizeFocus,
     lastReward,
+    currentSubtopic,
   } = useZiito();
 
   const [showSettings, setShowSettings] = useState(false);
@@ -94,6 +96,31 @@ export function FocusMode() {
             ))}
           </div>
         </div>
+
+        {/* Active sub-topic HUD card — links the timer to the current content node */}
+        {pomodoro.phase === "focus" && currentSubtopic && (
+          <div className="mb-5 flex items-center gap-3 rounded-2xl bg-white px-4 py-3 text-black shadow-xl">
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
+              style={{ backgroundColor: colorVar(DENSITY_META[currentSubtopic.density].colorHex) }}
+            >
+              <span className="text-sm font-black">{DENSITY_META[currentSubtopic.density].short[0]}</span>
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-black uppercase tracking-wider text-black/50">Enfoque activo</p>
+              <p className="truncate text-sm font-bold leading-tight">{currentSubtopic.title}</p>
+            </div>
+            <span
+              className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black"
+              style={{
+                backgroundColor: `${colorVar(DENSITY_META[currentSubtopic.density].colorHex)}22`,
+                color: colorVar(DENSITY_META[currentSubtopic.density].colorHex),
+              }}
+            >
+              Carga: {DENSITY_META[currentSubtopic.density].short}
+            </span>
+          </div>
+        )}
 
         {/* Controls */}
         <div className="relative flex items-center justify-center gap-5">

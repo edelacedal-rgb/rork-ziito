@@ -1,5 +1,5 @@
 // Smart study-plan generator, ported from iOS ZiitonerService.
-import type { Exam, StudySession } from "./ziito-types";
+import { slopeIndex, totalDensityPoints, type Exam, type StudySession } from "./ziito-types";
 import { daysUntil, startOfDay } from "./ziito-date";
 
 const MAX_SESSIONS_PER_DAY = 5;
@@ -33,7 +33,13 @@ function totalSessions(exam: Exam, urgency: number): number {
   const priorityBonus = exam.priority;
   const urgencyBonus = Math.min(Math.floor(urgency * 2), 6);
   const timeBonus = Math.max(8 - d, 0);
-  return Math.min(base + priorityBonus + urgencyBonus + timeBonus, 16);
+  // Slope Index: denser content over fewer days demands more focus nodes before
+  // the peak. Each sub-topic also guarantees at least one dedicated block.
+  const slope = slopeIndex(exam, d);
+  const densityBonus = Math.min(Math.ceil(slope * 3), 8);
+  const topicFloor = Math.min(totalDensityPoints(exam), 12);
+  const computed = base + priorityBonus + urgencyBonus + timeBonus + densityBonus;
+  return Math.min(Math.max(computed, topicFloor), 24);
 }
 
 function distribute(total: number, days: number, urgency: number): number[] {
